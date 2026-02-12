@@ -357,7 +357,7 @@ export default function Orders() {
             loading={loading}
             block
             size="large"
-            style={{ height: 48, fontSize: 16, fontWeight: 'bold', background: '#4A90E2', borderColor: '#4A90E2' }}
+            style={{ height: 48, fontSize: 16, fontWeight: 'bold' }}
           >
             模拟上游订单自动进入
           </Button>

@@ -1,6 +1,6 @@
 {
   "name": "yisong-frontend",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "易送 - 即时配送聚合发单平台前端",
   "type": "module",
   "scripts": {
