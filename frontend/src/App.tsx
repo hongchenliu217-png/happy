@@ -12,6 +12,7 @@ import PlatformBind from './pages/mine/PlatformBind';
 import DeliveryBind from './pages/mine/DeliveryBind';
 import OrderSettings from './pages/mine/OrderSettings';
 import DeliverySettings from './pages/mine/DeliverySettings';
+import PlatformPerformance from './pages/mine/PlatformPerformance';
 import Layout from './components/Layout';
 
 function App() {
@@ -36,6 +37,7 @@ function App() {
         <Route path="/mine/delivery-bind" element={<DeliveryBind />} />
         <Route path="/mine/order-settings" element={<OrderSettings />} />
         <Route path="/mine/delivery-settings" element={<DeliverySettings />} />
+        <Route path="/mine/platform-performance" element={<PlatformPerformance />} />
       </Routes>
     </Layout>
   );

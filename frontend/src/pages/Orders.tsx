@@ -1,6 +1,16 @@
 import { useState, useEffect } from 'react';
-import { Tabs, Button, Card, Tag, Space, message, Modal, Badge, Radio } from 'antd';
-import { CheckOutlined, PlusOutlined, ClockCircleOutlined, ThunderboltOutlined, RocketOutlined } from '@ant-design/icons';
+import { Tabs, Button, Card, Tag, Space, message, Modal, Badge, Radio, Row, Col, Statistic, Empty } from 'antd';
+import {
+  CheckOutlined,
+  PlusOutlined,
+  ClockCircleOutlined,
+  ThunderboltOutlined,
+  RocketOutlined,
+  ShoppingOutlined,
+  DollarOutlined,
+  TruckOutlined,
+  WarningOutlined
+} from '@ant-design/icons';
 import { ordersApi, Order } from '../api/orders';
 import client from '../api/client';
 import dayjs from 'dayjs';
@@ -57,6 +67,15 @@ export default function Orders() {
     } catch (error) {
       console.error('加载平台失败:', error);
     }
+  };
+
+  // 计算统计数据
+  const stats = {
+    total: orders.length,
+    pending: orders.filter(o => o.status === 'pending').length,
+    delivering: orders.filter(o => ['picked_up', 'delivering'].includes(o.status)).length,
+    delivered: orders.filter(o => o.status === 'delivered').length,
+    totalAmount: orders.reduce((sum, o) => sum + parseFloat(o.totalAmount || '0'), 0).toFixed(2)
   };
 
   const simulateOrder = async () => {
@@ -125,7 +144,6 @@ export default function Orders() {
     try {
       const platform = platformPrices.find(p => p.code === selectedPlatform);
 
-      // 更新订单状态为呼叫运力中（待抢单）
       await ordersApi.updateOrderStatus(selectedOrder.id, 'delivery_calling');
       message.info(`正在呼叫${platform?.name}，等待骑手接单...`);
 
@@ -133,7 +151,6 @@ export default function Orders() {
       setSelectedPlatform('');
       loadOrders();
 
-      // 模拟运力接单（5秒后）
       setTimeout(async () => {
         await ordersApi.dispatchOrder(selectedOrder.id, selectedPlatform);
         await ordersApi.updateOrderStatus(selectedOrder.id, 'delivery_accepted');
@@ -197,15 +214,32 @@ export default function Orders() {
   const renderOrderCard = (order: Order) => (
     <Card
       key={order.id}
-      style={{ marginBottom: 12, borderRadius: 8 }}
-      bodyStyle={{ padding: 12 }}
+      style={{
+        marginBottom: 12,
+        borderRadius: 12,
+        boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+        border: '1px solid #f0f0f0'
+      }}
+      bodyStyle={{ padding: 16 }}
     >
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-        <Space>
-          <Tag color={sourceMap[order.source]?.color || 'default'} style={{ margin: 0, fontSize: 13, fontWeight: 'bold' }}>
+      {/* 订单头部 */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+        <Space size={8}>
+          <Tag
+            color={sourceMap[order.source]?.color || 'default'}
+            style={{
+              margin: 0,
+              fontSize: 13,
+              fontWeight: 'bold',
+              padding: '4px 12px',
+              borderRadius: 6
+            }}
+          >
             {sourceMap[order.source]?.text || order.source}
           </Tag>
-          <span style={{ fontSize: 11, color: '#999' }}>{order.orderNo?.slice(-8)}</span>
+          <span style={{ fontSize: 11, color: '#999', fontFamily: 'monospace' }}>
+            #{order.orderNo?.slice(-8)}
+          </span>
         </Space>
         <Badge
           status={
@@ -214,85 +248,143 @@ export default function Orders() {
             statusMap[order.status]?.color === 'warning' ? 'warning' :
             'default'
           }
-          text={<span style={{
-            fontSize: 12,
-            fontWeight: 'bold',
-            color: statusMap[order.status]?.color === 'success' ? '#5AB572' :
-                   statusMap[order.status]?.color === 'processing' ? '#4A90E2' :
-                   statusMap[order.status]?.color === 'warning' ? '#F5A623' : '#666'
-          }}>
-            {statusMap[order.status]?.text}
-          </span>}
+          text={
+            <span style={{
+              fontSize: 13,
+              fontWeight: 600,
+              color: statusMap[order.status]?.color === 'success' ? '#52c41a' :
+                     statusMap[order.status]?.color === 'processing' ? '#1890ff' :
+                     statusMap[order.status]?.color === 'warning' ? '#faad14' : '#666'
+            }}>
+              {statusMap[order.status]?.text}
+            </span>
+          }
         />
       </div>
 
-      <div style={{ fontSize: 13, color: '#333', marginBottom: 8 }}>
-        <div style={{ marginBottom: 4 }}>
-          <strong>{order.customerName}</strong> <span style={{ color: '#999', fontSize: 12 }}>{order.customerPhone}</span>
+      {/* 客户信息 */}
+      <div style={{
+        padding: '12px',
+        background: '#fafafa',
+        borderRadius: 8,
+        marginBottom: 12
+      }}>
+        <div style={{ marginBottom: 6, display: 'flex', alignItems: 'center' }}>
+          <strong style={{ fontSize: 14, marginRight: 8 }}>{order.customerName}</strong>
+          <span style={{ color: '#999', fontSize: 12 }}>{order.customerPhone}</span>
         </div>
-        <div style={{ color: '#666', fontSize: 12 }}>
-          📍 {order.deliveryAddress}
+        <div style={{ color: '#666', fontSize: 13, display: 'flex', alignItems: 'flex-start' }}>
+          <span style={{ marginRight: 4 }}>📍</span>
+          <span>{order.deliveryAddress}</span>
         </div>
       </div>
 
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, padding: '8px 0', borderTop: '1px solid #f0f0f0', borderBottom: '1px solid #f0f0f0' }}>
-        <span style={{ fontSize: 12, color: '#666' }}>
-          <ClockCircleOutlined /> {dayjs(order.createdAt).format('HH:mm:ss')}
-        </span>
-        <span style={{ fontSize: 16, fontWeight: 'bold', color: '#ff4d4f' }}>
-          ¥{order.totalAmount}
-        </span>
+      {/* 订单信息 */}
+      <div style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        padding: '12px 0',
+        borderTop: '1px solid #f0f0f0',
+        borderBottom: '1px solid #f0f0f0',
+        marginBottom: 12
+      }}>
+        <Space size={16}>
+          <span style={{ fontSize: 12, color: '#999' }}>
+            <ClockCircleOutlined style={{ marginRight: 4 }} />
+            {dayjs(order.createdAt).format('HH:mm:ss')}
+          </span>
+        </Space>
+        <div style={{ textAlign: 'right' }}>
+          <div style={{ fontSize: 20, fontWeight: 'bold', color: '#ff4d4f' }}>
+            ¥{order.totalAmount}
+          </div>
+        </div>
       </div>
 
+      {/* 操作按钮 */}
       <Space style={{ width: '100%' }} direction="vertical" size={8}>
-        {/* 新订单 - 发起配送 + 出餐 */}
         {order.status === 'pending' && (
-          <>
-            <Button
-              type="primary"
-              icon={<RocketOutlined />}
-              block
-              size="large"
-              onClick={() => handleCallDelivery(order)}
-              style={{ background: '#4A90E2', borderColor: '#4A90E2' }}
-            >
-              发起配送
-            </Button>
-            <Button
-              icon={<CheckOutlined />}
-              block
-              size="large"
-              onClick={() => handleMealReady(order)}
-              style={{ borderColor: '#d9d9d9', color: '#666' }}
-            >
-              出餐
-            </Button>
-          </>
+          <Row gutter={8}>
+            <Col span={12}>
+              <Button
+                type="primary"
+                icon={<RocketOutlined />}
+                block
+                size="large"
+                onClick={() => handleCallDelivery(order)}
+                style={{
+                  background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                  border: 'none',
+                  height: 44,
+                  borderRadius: 8,
+                  fontWeight: 'bold'
+                }}
+              >
+                发起配送
+              </Button>
+            </Col>
+            <Col span={12}>
+              <Button
+                icon={<CheckOutlined />}
+                block
+                size="large"
+                onClick={() => handleMealReady(order)}
+                style={{
+                  height: 44,
+                  borderRadius: 8,
+                  borderColor: '#d9d9d9',
+                  color: '#666'
+                }}
+              >
+                出餐
+              </Button>
+            </Col>
+          </Row>
         )}
 
-        {/* 待抢单 - 呼叫运力中 + 出餐 */}
         {order.status === 'delivery_calling' && (
           <>
-            <div style={{ textAlign: 'center', padding: '12px', background: '#E8F4FD', borderRadius: 4, marginBottom: 8 }}>
-              <span style={{ color: '#4A90E2', fontSize: 13 }}>⏳ 等待骑手接单...</span>
+            <div style={{
+              textAlign: 'center',
+              padding: '12px',
+              background: 'linear-gradient(135deg, #e6f7ff 0%, #bae7ff 100%)',
+              borderRadius: 8,
+              marginBottom: 4
+            }}>
+              <span style={{ color: '#1890ff', fontSize: 13, fontWeight: 'bold' }}>
+                ⏳ 等待骑手接单...
+              </span>
             </div>
             <Button
               icon={<CheckOutlined />}
               block
               size="large"
               onClick={() => handleMealReady(order)}
-              style={{ borderColor: '#d9d9d9', color: '#666' }}
+              style={{
+                height: 44,
+                borderRadius: 8,
+                borderColor: '#d9d9d9',
+                color: '#666'
+              }}
             >
               出餐
             </Button>
           </>
         )}
 
-        {/* 待取货 - 运力已接单 + 出餐 */}
         {order.status === 'delivery_accepted' && (
           <>
-            <div style={{ textAlign: 'center', padding: '12px', background: '#F0F9F4', borderRadius: 4, marginBottom: 8 }}>
-              <span style={{ color: '#5AB572', fontSize: 13 }}>✓ 骑手已接单</span>
+            <div style={{
+              textAlign: 'center',
+              padding: '12px',
+              background: 'linear-gradient(135deg, #f6ffed 0%, #d9f7be 100%)',
+              borderRadius: 8,
+              marginBottom: 4
+            }}>
+              <span style={{ color: '#52c41a', fontSize: 13, fontWeight: 'bold' }}>
+                ✓ 骑手已接单
+              </span>
             </div>
             <Button
               type="primary"
@@ -300,24 +392,42 @@ export default function Orders() {
               block
               size="large"
               onClick={() => handleMealReady(order)}
-              style={{ background: '#5AB572', borderColor: '#5AB572' }}
+              style={{
+                background: '#52c41a',
+                borderColor: '#52c41a',
+                height: 44,
+                borderRadius: 8,
+                fontWeight: 'bold'
+              }}
             >
               出餐
             </Button>
           </>
         )}
 
-        {/* 配送中的状态显示 */}
         {['ready', 'picked_up', 'delivering'].includes(order.status) && (
-          <div style={{ textAlign: 'center', padding: '12px', background: '#F0F9F4', borderRadius: 4 }}>
-            <span style={{ color: '#5AB572', fontSize: 13 }}>✓ {statusMap[order.status]?.text}</span>
+          <div style={{
+            textAlign: 'center',
+            padding: '12px',
+            background: 'linear-gradient(135deg, #f6ffed 0%, #d9f7be 100%)',
+            borderRadius: 8
+          }}>
+            <span style={{ color: '#52c41a', fontSize: 13, fontWeight: 'bold' }}>
+              ✓ {statusMap[order.status]?.text}
+            </span>
           </div>
         )}
 
-        {/* 已完成 */}
         {order.status === 'delivered' && (
-          <div style={{ textAlign: 'center', padding: '12px', background: '#F0F9F4', borderRadius: 4 }}>
-            <span style={{ color: '#5AB572', fontSize: 14, fontWeight: 'bold' }}>✓ 订单已完成</span>
+          <div style={{
+            textAlign: 'center',
+            padding: '16px',
+            background: 'linear-gradient(135deg, #f6ffed 0%, #d9f7be 100%)',
+            borderRadius: 8
+          }}>
+            <span style={{ color: '#52c41a', fontSize: 15, fontWeight: 'bold' }}>
+              ✓ 订单已完成
+            </span>
           </div>
         )}
       </Space>
@@ -325,11 +435,11 @@ export default function Orders() {
   );
 
   const tabItems = [
-    { key: 'new', label: '新订单' },
+    { key: 'new', label: <Badge count={stats.pending} offset={[10, 0]}><span>新订单</span></Badge> },
     { key: 'pre', label: '预订单' },
     { key: 'waiting', label: '待抢单' },
     { key: 'pickup', label: '待取货' },
-    { key: 'delivering', label: '配送中' },
+    { key: 'delivering', label: <Badge count={stats.delivering} offset={[10, 0]}><span>配送中</span></Badge> },
     { key: 'exception', label: '异常' },
     { key: 'refund', label: '退款' }
   ];
@@ -337,19 +447,105 @@ export default function Orders() {
   const filteredOrders = filterOrdersByTab(activeTab);
 
   return (
-    <div style={{ background: '#f5f5f5', minHeight: '100vh' }}>
-      <div style={{ background: '#fff', position: 'sticky', top: 64, zIndex: 999 }}>
+    <div style={{ background: '#f5f5f5', minHeight: '100vh', paddingBottom: 20 }}>
+      {/* 数据概览卡片 */}
+      <div style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', padding: '20px 16px' }}>
+        <Row gutter={[12, 12]}>
+          <Col span={6}>
+            <Card
+              size="small"
+              style={{
+                borderRadius: 12,
+                border: 'none',
+                background: 'rgba(255,255,255,0.95)',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
+              }}
+              bodyStyle={{ padding: '16px 12px' }}
+            >
+              <Statistic
+                title={<span style={{ fontSize: 12, color: '#666' }}>今日订单</span>}
+                value={stats.total}
+                prefix={<ShoppingOutlined style={{ color: '#1890ff' }} />}
+                valueStyle={{ fontSize: 24, fontWeight: 'bold', color: '#1890ff' }}
+              />
+            </Card>
+          </Col>
+          <Col span={6}>
+            <Card
+              size="small"
+              style={{
+                borderRadius: 12,
+                border: 'none',
+                background: 'rgba(255,255,255,0.95)',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
+              }}
+              bodyStyle={{ padding: '16px 12px' }}
+            >
+              <Statistic
+                title={<span style={{ fontSize: 12, color: '#666' }}>待处理</span>}
+                value={stats.pending}
+                prefix={<WarningOutlined style={{ color: '#faad14' }} />}
+                valueStyle={{ fontSize: 24, fontWeight: 'bold', color: '#faad14' }}
+              />
+            </Card>
+          </Col>
+          <Col span={6}>
+            <Card
+              size="small"
+              style={{
+                borderRadius: 12,
+                border: 'none',
+                background: 'rgba(255,255,255,0.95)',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
+              }}
+              bodyStyle={{ padding: '16px 12px' }}
+            >
+              <Statistic
+                title={<span style={{ fontSize: 12, color: '#666' }}>配送中</span>}
+                value={stats.delivering}
+                prefix={<TruckOutlined style={{ color: '#52c41a' }} />}
+                valueStyle={{ fontSize: 24, fontWeight: 'bold', color: '#52c41a' }}
+              />
+            </Card>
+          </Col>
+          <Col span={6}>
+            <Card
+              size="small"
+              style={{
+                borderRadius: 12,
+                border: 'none',
+                background: 'rgba(255,255,255,0.95)',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
+              }}
+              bodyStyle={{ padding: '16px 12px' }}
+            >
+              <Statistic
+                title={<span style={{ fontSize: 12, color: '#666' }}>今日营收</span>}
+                value={stats.totalAmount}
+                prefix={<DollarOutlined style={{ color: '#ff4d4f' }} />}
+                valueStyle={{ fontSize: 24, fontWeight: 'bold', color: '#ff4d4f' }}
+                precision={2}
+              />
+            </Card>
+          </Col>
+        </Row>
+      </div>
+
+      {/* 标签页 */}
+      <div style={{ background: '#fff', position: 'sticky', top: 64, zIndex: 999, boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
         <Tabs
           activeKey={activeTab}
           onChange={setActiveTab}
           items={tabItems}
           style={{ margin: 0 }}
-          tabBarStyle={{ margin: '0 12px', paddingTop: 8 }}
+          tabBarStyle={{ margin: '0 16px', paddingTop: 8 }}
         />
       </div>
 
-      <div style={{ padding: '12px' }}>
-        <div style={{ marginBottom: 12 }}>
+      {/* 订单列表 */}
+      <div style={{ padding: '16px' }}>
+        {/* 快捷操作按钮 */}
+        <div style={{ marginBottom: 16 }}>
           <Button
             type="primary"
             icon={<PlusOutlined />}
@@ -357,35 +553,85 @@ export default function Orders() {
             loading={loading}
             block
             size="large"
-            style={{ height: 48, fontSize: 16, fontWeight: 'bold' }}
+            style={{
+              height: 52,
+              fontSize: 16,
+              fontWeight: 'bold',
+              borderRadius: 12,
+              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              border: 'none',
+              boxShadow: '0 4px 12px rgba(102, 126, 234, 0.4)'
+            }}
           >
             模拟上游订单自动进入
           </Button>
         </div>
 
+        {/* 订单列表或空状态 */}
         {filteredOrders.length === 0 ? (
-          <Card style={{ textAlign: 'center', padding: '40px 20px' }}>
-            <p style={{ color: '#999', fontSize: 14 }}>暂无订单</p>
-            <p style={{ color: '#999', fontSize: 12 }}>点击上方按钮模拟上游订单自动进入</p>
+          <Card style={{
+            textAlign: 'center',
+            padding: '60px 20px',
+            borderRadius: 12,
+            border: '2px dashed #d9d9d9'
+          }}>
+            <Empty
+              image={Empty.PRESENTED_IMAGE_SIMPLE}
+              description={
+                <div>
+                  <p style={{ color: '#999', fontSize: 15, marginBottom: 8 }}>暂无订单</p>
+                  <p style={{ color: '#bfbfbf', fontSize: 13 }}>
+                    点击上方按钮模拟订单自动进入
+                  </p>
+                </div>
+              }
+            />
           </Card>
         ) : (
           filteredOrders.map(renderOrderCard)
         )}
       </div>
 
+      {/* 派单弹窗 */}
       <Modal
-        title="选择运力平台"
+        title={
+          <div style={{ fontSize: 18, fontWeight: 'bold' }}>
+            <RocketOutlined style={{ marginRight: 8, color: '#1890ff' }} />
+            选择运力平台
+          </div>
+        }
         open={dispatchModalVisible}
         onCancel={() => {
           setDispatchModalVisible(false);
           setSelectedOrder(null);
           setSelectedPlatform('');
         }}
-        footer={null}
+        footer={
+          <Button
+            type="primary"
+            size="large"
+            block
+            onClick={confirmDispatch}
+            disabled={!selectedPlatform}
+            style={{
+              height: 48,
+              fontSize: 16,
+              fontWeight: 'bold',
+              borderRadius: 8,
+              background: selectedPlatform ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' : undefined,
+              border: 'none'
+            }}
+          >
+            确认派单
+          </Button>
+        }
         width="90%"
+        style={{ maxWidth: 500 }}
       >
         <div style={{ marginBottom: 16 }}>
-          <p style={{ marginBottom: 12, color: '#666', fontSize: 13 }}>各平台实时报价：</p>
+          <p style={{ marginBottom: 16, color: '#666', fontSize: 14, fontWeight: 'bold' }}>
+            各平台实时报价：
+          </p>
 
           <Radio.Group
             value={selectedPlatform}
@@ -400,22 +646,30 @@ export default function Orders() {
                   style={{
                     width: '100%',
                     height: 'auto',
-                    padding: '12px',
-                    textAlign: 'left',
-                    borderRadius: 8
+                    padding: 16,
+                    borderRadius: 8,
+                    border: selectedPlatform === platform.code ? '2px solid #1890ff' : '1px solid #d9d9d9',
+                    background: selectedPlatform === platform.code ? '#e6f7ff' : 'white'
                   }}
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div>
-                      <div style={{ fontSize: 15, fontWeight: 'bold', marginBottom: 4 }}>
+                      <div style={{ fontSize: 16, fontWeight: 'bold', marginBottom: 4 }}>
                         {platform.name}
                       </div>
-                      <div style={{ fontSize: 12, color: '#999' }}>
-                        预计{platform.estimatedTime}分钟 · {platform.distance}km
-                      </div>
+                      <Space size={16}>
+                        <span style={{ fontSize: 12, color: '#999' }}>
+                          预计 {platform.estimatedTime} 分钟
+                        </span>
+                        <span style={{ fontSize: 12, color: '#999' }}>
+                          {platform.distance} 公里
+                        </span>
+                      </Space>
                     </div>
-                    <div style={{ fontSize: 18, fontWeight: 'bold', color: '#ff4d4f' }}>
-                      ¥{platform.price}
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ fontSize: 24, fontWeight: 'bold', color: '#ff4d4f' }}>
+                        ¥{platform.price}
+                      </div>
                     </div>
                   </div>
                 </Radio.Button>
@@ -423,21 +677,6 @@ export default function Orders() {
             </Space>
           </Radio.Group>
         </div>
-
-        <Button
-          type="primary"
-          icon={<ThunderboltOutlined />}
-          block
-          size="large"
-          onClick={confirmDispatch}
-          disabled={!selectedPlatform}
-        >
-          呼叫选定平台
-        </Button>
-
-        <p style={{ fontSize: 11, color: '#999', marginTop: 12, textAlign: 'center' }}>
-          选择运力平台后点击呼叫，等待平台接单
-        </p>
       </Modal>
     </div>
   );
