@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react';
-import { Layout as AntLayout, Menu } from 'antd';
+import { Layout as AntLayout } from 'antd';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
-  AppstoreOutlined,
-  DashboardOutlined,
+  UnorderedListOutlined,
+  PieChartOutlined,
   BarChartOutlined,
-  ApiOutlined,
-  LogoutOutlined
+  UserOutlined,
+  LogoutOutlined,
+  CarOutlined
 } from '@ant-design/icons';
 import { useAuthStore } from '../store/auth';
 
@@ -24,11 +25,11 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  const menuItems = [
-    { key: '/orders', icon: <AppstoreOutlined />, label: '订单' },
-    { key: '/dashboard', icon: <DashboardOutlined />, label: '仪表盘' },
-    { key: '/statistics', icon: <BarChartOutlined />, label: '数据统计' },
-    { key: '/mine', icon: <ApiOutlined />, label: '我的' }
+  const navItems = [
+    { key: '/orders', icon: UnorderedListOutlined, label: '订单' },
+    { key: '/dashboard', icon: PieChartOutlined, label: '仪表盘' },
+    { key: '/statistics', icon: BarChartOutlined, label: '数据统计' },
+    { key: '/mine', icon: UserOutlined, label: '我的' }
   ];
 
   return (
@@ -46,7 +47,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         height: isMobile ? 56 : 64
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <AppstoreOutlined style={{ fontSize: isMobile ? 18 : 20 }} />
+          <CarOutlined style={{ fontSize: isMobile ? 18 : 20 }} />
           <h2 style={{ color: '#fff', margin: 0, fontSize: isMobile ? 16 : 18, fontWeight: 'bold' }}>易送</h2>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? 8 : 12 }}>
@@ -66,37 +67,74 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         borderTop: '1px solid #f0f0f0',
         position: 'sticky',
         bottom: 0,
-        zIndex: 1000
+        zIndex: 1000,
+        paddingBottom: 'env(safe-area-inset-bottom)'
       }}>
-        <Menu
-          mode="horizontal"
-          selectedKeys={[location.pathname]}
-          items={menuItems.map(item => ({
-            key: item.key,
-            style: {
-              flex: 1,
-              justifyContent: 'center',
-              margin: 0,
-              padding: isMobile ? '10px 0' : '12px 0'
-            },
-            label: (
-              <div style={{
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                fontSize: isMobile ? 12 : 14
-              }}>
-                <span style={{ fontSize: isMobile ? 20 : 22 }}>{item.icon}</span>
-                <span>{item.label}</span>
+        <div style={{ display: 'flex', height: isMobile ? 56 : 60 }}>
+          {navItems.map(item => {
+            const isActive = location.pathname === item.key;
+            const IconComp = item.icon;
+            return (
+              <div
+                key={item.key}
+                onClick={() => navigate(item.key)}
+                style={{
+                  flex: 1,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 3,
+                  cursor: 'pointer',
+                  position: 'relative',
+                  transition: 'all 0.2s',
+                  userSelect: 'none'
+                }}
+              >
+                {/* 选中指示条 */}
+                {isActive && (
+                  <div style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    width: 24,
+                    height: 2,
+                    borderRadius: '0 0 2px 2px',
+                    background: '#4A90E2'
+                  }} />
+                )}
+                {/* 图标容器 */}
+                <div style={{
+                  width: 32,
+                  height: 32,
+                  borderRadius: 10,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  background: isActive ? 'rgba(74,144,226,0.1)' : 'transparent',
+                  transition: 'all 0.2s'
+                }}>
+                  <IconComp style={{
+                    fontSize: 18,
+                    color: isActive ? '#4A90E2' : '#bfbfbf',
+                    transition: 'color 0.2s'
+                  }} />
+                </div>
+                {/* 文字 */}
+                <span style={{
+                  fontSize: 11,
+                  lineHeight: 1,
+                  color: isActive ? '#4A90E2' : '#bfbfbf',
+                  fontWeight: isActive ? 600 : 400,
+                  transition: 'all 0.2s'
+                }}>
+                  {item.label}
+                </span>
               </div>
-            )
-          }))}
-          onClick={({ key }) => navigate(key)}
-          style={{
-            display: 'flex',
-            borderBottom: 'none'
-          }}
-        />
+            );
+          })}
+        </div>
       </Footer>
     </AntLayout>
   );

@@ -2,20 +2,16 @@ import { useState, useEffect } from 'react';
 import {
   Card,
   Switch,
-  Radio,
   InputNumber,
   Slider,
   Button,
   Space,
   Divider,
   message,
-  List,
-  Tag,
   Select,
   Row,
   Col,
   TimePicker,
-  Collapse,
   Input
 } from 'antd';
 import {
@@ -25,7 +21,6 @@ import {
   SaveOutlined,
   EnvironmentOutlined,
   ClockCircleOutlined,
-  CarOutlined,
   PlusOutlined,
   DeleteOutlined,
   FieldTimeOutlined,
@@ -34,7 +29,7 @@ import {
   RocketOutlined,
   SafetyOutlined
 } from '@ant-design/icons';
-import dayjs, { Dayjs } from 'dayjs';
+import dayjs from 'dayjs';
 
 interface DistanceBasedPlatform {
   id: string;
@@ -49,7 +44,7 @@ interface TimeBasedStrategy {
   name: string;
   startTime: string; // HH:mm format
   endTime: string;
-  strategy: 'low-price' | 'fastest' | 'balanced';
+  strategy: 'low-price' | 'fastest';
   enabled: boolean;
 }
 
@@ -58,8 +53,8 @@ interface OrderAmountTier {
   id: string;
   minAmount: number;
   maxAmount: number;
-  strategy: 'low-price' | 'fastest' | 'balanced' | 'reliable';
-  platformPreference?: string; // 可选的平台偏好
+  strategy: 'low-price' | 'fastest' | 'custom-platform';
+  platformPreference?: string; // 可选的平台偏好（制定运力时使用）
 }
 
 // 重试策略
@@ -131,6 +126,7 @@ const platformNames: Record<string, string> = {
 
 export default function DeliverySettings() {
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
+  const [intelligentSubStrategy, setIntelligentSubStrategy] = useState<'time-based' | 'amount-based' | null>(null);
 
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth <= 768);
@@ -149,16 +145,16 @@ export default function DeliverySettings() {
     // 分时段策略
     timeBasedStrategies: [
       { id: '1', name: '早餐时段', startTime: '07:00', endTime: '09:00', strategy: 'fastest', enabled: true },
-      { id: '2', name: '午餐高峰', startTime: '11:00', endTime: '13:00', strategy: 'balanced', enabled: true },
-      { id: '3', name: '晚餐高峰', startTime: '17:00', endTime: '20:00', strategy: 'balanced', enabled: true },
+      { id: '2', name: '午餐高峰', startTime: '11:00', endTime: '13:00', strategy: 'fastest', enabled: true },
+      { id: '3', name: '晚餐高峰', startTime: '17:00', endTime: '20:00', strategy: 'fastest', enabled: true },
       { id: '4', name: '夜宵时段', startTime: '21:00', endTime: '23:59', strategy: 'low-price', enabled: false }
     ],
     enableTimeBasedStrategy: false,
     // 订单金额分级
     orderAmountTiers: [
       { id: '1', minAmount: 0, maxAmount: 30, strategy: 'low-price' },
-      { id: '2', minAmount: 30, maxAmount: 100, strategy: 'balanced' },
-      { id: '3', minAmount: 100, maxAmount: 999999, strategy: 'reliable', platformPreference: 'sf' }
+      { id: '2', minAmount: 30, maxAmount: 100, strategy: 'fastest' },
+      { id: '3', minAmount: 100, maxAmount: 999999, strategy: 'custom-platform', platformPreference: 'sf' }
     ],
     enableOrderAmountTier: false,
     // 策略优先级
@@ -242,7 +238,7 @@ export default function DeliverySettings() {
       name: '新时段',
       startTime: '00:00',
       endTime: '23:59',
-      strategy: 'balanced',
+      strategy: 'fastest',
       enabled: true
     };
     updateSettings({
@@ -271,7 +267,7 @@ export default function DeliverySettings() {
       id: Date.now().toString(),
       minAmount: lastTier ? lastTier.maxAmount : 0,
       maxAmount: lastTier ? lastTier.maxAmount + 50 : 50,
-      strategy: 'balanced'
+      strategy: 'fastest'
     };
     updateSettings({
       orderAmountTiers: [...settings.orderAmountTiers, newTier]
@@ -307,201 +303,6 @@ export default function DeliverySettings() {
       </div>
 
       <Space direction="vertical" size="middle" style={{ width: '100%' }}>
-        {/* 策略说明卡片 */}
-        <Card
-          size="small"
-          style={{
-            background: '#ffffff',
-            border: 'none',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.08)'
-          }}
-          bodyStyle={{ padding: isMobile ? 16 : 20 }}
-        >
-          <div style={{ fontSize: 15, fontWeight: 'bold', marginBottom: 16, color: '#262626' }}>
-            配送策略说明
-          </div>
-          <Row gutter={[12, 12]}>
-            <Col xs={24} sm={12} md={6}>
-              <div
-                style={{
-                  padding: isMobile ? 14 : 16,
-                  background: 'linear-gradient(135deg, #fff7e6 0%, #fffbf0 100%)',
-                  borderRadius: 8,
-                  border: '1px solid #ffe7ba',
-                  transition: 'all 0.3s',
-                  height: '100%'
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.transform = 'translateY(-2px)';
-                  e.currentTarget.style.boxShadow = '0 4px 12px rgba(250, 173, 20, 0.15)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.transform = 'translateY(0)';
-                  e.currentTarget.style.boxShadow = 'none';
-                }}
-              >
-                <div style={{
-                  width: 36,
-                  height: 36,
-                  borderRadius: 8,
-                  background: '#fff',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  marginBottom: 10,
-                  boxShadow: '0 2px 4px rgba(250, 173, 20, 0.1)'
-                }}>
-                  <DollarOutlined style={{ fontSize: 18, color: '#fa8c16' }} />
-                </div>
-                <div style={{ fontSize: 14, fontWeight: 'bold', marginBottom: 6, color: '#262626' }}>
-                  低价优先
-                </div>
-                <div style={{ fontSize: 12, color: '#8c8c8c', lineHeight: 1.6 }}>
-                  只看价格，选最便宜的<br/>
-                  <span style={{ color: '#fa8c16', fontSize: 11 }}>适合非高峰期订单</span>
-                </div>
-              </div>
-            </Col>
-            <Col xs={24} sm={12} md={6}>
-              <div
-                style={{
-                  padding: isMobile ? 14 : 16,
-                  background: 'linear-gradient(135deg, #f6ffed 0%, #fcffe6 100%)',
-                  borderRadius: 8,
-                  border: '2px solid #52c41a',
-                  transition: 'all 0.3s',
-                  height: '100%',
-                  position: 'relative',
-                  overflow: 'hidden'
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.transform = 'translateY(-2px)';
-                  e.currentTarget.style.boxShadow = '0 6px 16px rgba(82, 196, 26, 0.2)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.transform = 'translateY(0)';
-                  e.currentTarget.style.boxShadow = '0 2px 8px rgba(82, 196, 26, 0.1)';
-                }}
-              >
-                <div style={{
-                  position: 'absolute',
-                  top: 8,
-                  right: 8,
-                  background: '#52c41a',
-                  color: '#fff',
-                  fontSize: 10,
-                  padding: '2px 8px',
-                  borderRadius: 10,
-                  fontWeight: 'bold'
-                }}>
-                  推荐
-                </div>
-                <div style={{
-                  width: 36,
-                  height: 36,
-                  borderRadius: 8,
-                  background: '#fff',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  marginBottom: 10,
-                  boxShadow: '0 2px 4px rgba(82, 196, 26, 0.1)'
-                }}>
-                  <ThunderboltOutlined style={{ fontSize: 18, color: '#52c41a' }} />
-                </div>
-                <div style={{ fontSize: 14, fontWeight: 'bold', marginBottom: 6, color: '#52c41a' }}>
-                  平衡模式
-                </div>
-                <div style={{ fontSize: 12, color: '#8c8c8c', lineHeight: 1.6 }}>
-                  价格和速度都考虑，性价比高<br/>
-                  <span style={{ color: '#52c41a', fontSize: 11 }}>适合大多数日常订单</span>
-                </div>
-              </div>
-            </Col>
-            <Col xs={24} sm={12} md={6}>
-              <div
-                style={{
-                  padding: isMobile ? 14 : 16,
-                  background: 'linear-gradient(135deg, #e6f7ff 0%, #f0f9ff 100%)',
-                  borderRadius: 8,
-                  border: '1px solid #91d5ff',
-                  transition: 'all 0.3s',
-                  height: '100%'
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.transform = 'translateY(-2px)';
-                  e.currentTarget.style.boxShadow = '0 4px 12px rgba(24, 144, 255, 0.15)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.transform = 'translateY(0)';
-                  e.currentTarget.style.boxShadow = 'none';
-                }}
-              >
-                <div style={{
-                  width: 36,
-                  height: 36,
-                  borderRadius: 8,
-                  background: '#fff',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  marginBottom: 10,
-                  boxShadow: '0 2px 4px rgba(24, 144, 255, 0.1)'
-                }}>
-                  <RocketOutlined style={{ fontSize: 18, color: '#1890ff' }} />
-                </div>
-                <div style={{ fontSize: 14, fontWeight: 'bold', marginBottom: 6, color: '#262626' }}>
-                  速度优先
-                </div>
-                <div style={{ fontSize: 12, color: '#8c8c8c', lineHeight: 1.6 }}>
-                  只看速度，选最快的<br/>
-                  <span style={{ color: '#1890ff', fontSize: 11 }}>适合高峰期订单</span>
-                </div>
-              </div>
-            </Col>
-            <Col xs={24} sm={12} md={6}>
-              <div style={{
-                padding: isMobile ? 14 : 16,
-                background: 'linear-gradient(135deg, #f9f0ff 0%, #faf5ff 100%)',
-                borderRadius: 8,
-                border: '1px solid #d3adf7',
-                transition: 'all 0.3s',
-                cursor: 'pointer',
-                height: '100%'
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.transform = 'translateY(-2px)';
-                e.currentTarget.style.boxShadow = '0 4px 12px rgba(114, 46, 209, 0.15)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.transform = 'translateY(0)';
-                e.currentTarget.style.boxShadow = 'none';
-              }}>
-                <div style={{
-                  width: 36,
-                  height: 36,
-                  borderRadius: 8,
-                  background: '#fff',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  marginBottom: 10,
-                  boxShadow: '0 2px 4px rgba(114, 46, 209, 0.1)'
-                }}>
-                  <SafetyOutlined style={{ fontSize: 18, color: '#722ed1' }} />
-                </div>
-                <div style={{ fontSize: 14, fontWeight: 'bold', marginBottom: 6, color: '#262626' }}>
-                  品质保障
-                </div>
-                <div style={{ fontSize: 12, color: '#8c8c8c', lineHeight: 1.6 }}>
-                  只选零投诉、高评分平台<br/>
-                  <span style={{ color: '#722ed1', fontSize: 11 }}>适合贵重物品</span>
-                </div>
-              </div>
-            </Col>
-          </Row>
-        </Card>
-
         {/* 派单策略 */}
         <Card
           size="small"
@@ -524,7 +325,7 @@ export default function DeliverySettings() {
             {/* 低价优先 */}
             <Col xs={24} sm={12} md={12} lg={12}>
               <div
-                onClick={() => updateSettings({ dispatchStrategy: 'low-price' })}
+                onClick={() => { updateSettings({ dispatchStrategy: 'low-price' }); setIntelligentSubStrategy(null); }}
                 style={{
                   padding: isMobile ? 14 : 16,
                   background: settings.dispatchStrategy === 'low-price'
@@ -601,7 +402,7 @@ export default function DeliverySettings() {
             {/* 速度优先 */}
             <Col xs={24} sm={12} md={12} lg={12}>
               <div
-                onClick={() => updateSettings({ dispatchStrategy: 'fastest' })}
+                onClick={() => { updateSettings({ dispatchStrategy: 'fastest' }); setIntelligentSubStrategy(null); }}
                 style={{
                   padding: isMobile ? 14 : 16,
                   background: settings.dispatchStrategy === 'fastest'
@@ -675,7 +476,7 @@ export default function DeliverySettings() {
               </div>
             </Col>
 
-            {/* 平衡模式 */}
+            {/* 智能化设置 */}
             <Col xs={24} sm={12} md={12} lg={12}>
               <div
                 onClick={() => updateSettings({ dispatchStrategy: 'balanced' })}
@@ -756,19 +557,19 @@ export default function DeliverySettings() {
                     <ThunderboltOutlined style={{ fontSize: 16, color: '#52c41a' }} />
                   </div>
                   <div style={{ fontSize: 15, fontWeight: 'bold', color: '#262626' }}>
-                    平衡模式
+                    智能化设置
                   </div>
                 </div>
                 <div style={{ fontSize: 12, color: '#8c8c8c', lineHeight: 1.6, paddingLeft: 42 }}>
-                  综合考虑价格和速度，自动选择性价比最优方案
+                  可配置分时段策略和订单金额分级，智能匹配最优配送方案
                 </div>
               </div>
             </Col>
 
-            {/* 自定义 */}
+            {/* 按距离派单 */}
             <Col xs={24} sm={12} md={12} lg={12}>
               <div
-                onClick={() => updateSettings({ dispatchStrategy: 'custom' })}
+                onClick={() => { updateSettings({ dispatchStrategy: 'custom' }); setIntelligentSubStrategy(null); }}
                 style={{
                   padding: isMobile ? 14 : 16,
                   background: settings.dispatchStrategy === 'custom'
@@ -833,7 +634,7 @@ export default function DeliverySettings() {
                     <SettingOutlined style={{ fontSize: 16, color: '#722ed1' }} />
                   </div>
                   <div style={{ fontSize: 15, fontWeight: 'bold', color: '#262626' }}>
-                    自定义
+                    按距离派单
                   </div>
                 </div>
                 <div style={{ fontSize: 12, color: '#8c8c8c', lineHeight: 1.6, paddingLeft: 42 }}>
@@ -940,344 +741,416 @@ export default function DeliverySettings() {
           </Card>
         )}
 
-        {/* 分时段配送策略 - 仅在平衡模式下显示 */}
+
+        {/* 智能化设置 - 子策略选择 */}
         {settings.dispatchStrategy === 'balanced' && (
           <Card
             size="small"
-            style={{
-              background: '#ffffff',
-              border: 'none',
-              boxShadow: '0 2px 8px rgba(0,0,0,0.08)'
-            }}
-            bodyStyle={{ padding: isMobile ? 16 : 20 }}
+            style={{ background: '#ffffff', border: 'none', boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }}
+            styles={{ body: { padding: isMobile ? 16 : 20 } }}
           >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-              <div>
-                <div style={{ fontSize: 15, fontWeight: 'bold', color: '#262626', marginBottom: 4 }}>
-                  <FieldTimeOutlined style={{ marginRight: 8, color: '#1890ff' }} />
-                  分时段配送策略
-                </div>
-                <div style={{ fontSize: 12, color: '#8c8c8c', paddingLeft: 26 }}>
-                  根据不同时段自动切换配送策略，提升配送效率
-                </div>
-              </div>
-              <Switch
-                checked={settings.enableTimeBasedStrategy}
-                onChange={checked => updateSettings({ enableTimeBasedStrategy: checked })}
-                style={{
-                  background: settings.enableTimeBasedStrategy ? '#52c41a' : undefined
-                }}
-              />
+            <div style={{ fontSize: 14, fontWeight: 'bold', color: '#262626', marginBottom: 4 }}>
+              选择智能化策略类型
             </div>
-
-          {settings.enableTimeBasedStrategy && (
-            <>
-              <Space direction="vertical" style={{ width: '100%' }} size={12}>
-                {settings.timeBasedStrategies.map(strategy => (
-                  <Card
-                    key={strategy.id}
-                    size="small"
-                    style={{
-                      background: strategy.enabled ? '#ffffff' : '#fafafa',
-                      border: strategy.enabled ? '1px solid #d9d9d9' : '1px solid #e8e8e8',
-                      borderRadius: 8,
-                      opacity: strategy.enabled ? 1 : 0.7
-                    }}
-                    bodyStyle={{ padding: isMobile ? 12 : 16 }}
-                  >
-                    {/* 头部：开关和名称 */}
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                      <Space size={8}>
-                        <Switch
-                          checked={strategy.enabled}
-                          onChange={checked => updateTimeStrategy(strategy.id, { enabled: checked })}
-                          size="small"
-                        />
-                        <Input
-                          value={strategy.name}
-                          onChange={e => updateTimeStrategy(strategy.id, { name: e.target.value })}
-                          bordered={false}
-                          style={{
-                            fontWeight: 'bold',
-                            fontSize: isMobile ? 14 : 15,
-                            padding: 0,
-                            width: isMobile ? 100 : 120
-                          }}
-                          placeholder="时段名称"
-                        />
-                      </Space>
-                      {settings.timeBasedStrategies.length > 1 && (
-                        <Button
-                          type="text"
-                          danger
-                          size="small"
-                          icon={<DeleteOutlined />}
-                          onClick={() => removeTimeStrategy(strategy.id)}
-                        />
-                      )}
+            <div style={{ fontSize: 12, color: '#8c8c8c', marginBottom: 16 }}>
+              请选择一种策略进行配置，两种策略互斥
+            </div>
+            <Row gutter={[12, 12]}>
+              {/* 分时段配送 */}
+              <Col xs={24} sm={12}>
+                <div
+                  onClick={() => setIntelligentSubStrategy('time-based')}
+                  style={{
+                    padding: isMobile ? 14 : 16,
+                    background: intelligentSubStrategy === 'time-based'
+                      ? 'linear-gradient(135deg, #e6f7ff 0%, #f0f9ff 100%)'
+                      : '#fafafa',
+                    borderRadius: 8,
+                    border: intelligentSubStrategy === 'time-based'
+                      ? '2px solid #1890ff'
+                      : '2px solid #e8e8e8',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s',
+                    position: 'relative'
+                  }}
+                  onMouseEnter={e => {
+                    if (intelligentSubStrategy !== 'time-based') {
+                      e.currentTarget.style.borderColor = '#d9d9d9';
+                      e.currentTarget.style.transform = 'translateY(-2px)';
+                      e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.08)';
+                    }
+                  }}
+                  onMouseLeave={e => {
+                    if (intelligentSubStrategy !== 'time-based') {
+                      e.currentTarget.style.borderColor = '#e8e8e8';
+                      e.currentTarget.style.transform = 'translateY(0)';
+                      e.currentTarget.style.boxShadow = 'none';
+                    }
+                  }}
+                >
+                  {intelligentSubStrategy === 'time-based' && (
+                    <div style={{
+                      position: 'absolute', top: -1, right: -1,
+                      width: 0, height: 0, borderStyle: 'solid',
+                      borderWidth: '0 28px 28px 0',
+                      borderColor: 'transparent #1890ff transparent transparent',
+                      borderRadius: '0 6px 0 0'
+                    }}>
+                      <div style={{ position: 'absolute', top: 1, right: -24, color: '#fff', fontSize: 12 }}>✓</div>
                     </div>
-
-                    {/* 时间范围 */}
-                    <div style={{ marginBottom: 12 }}>
-                      <div style={{ fontSize: 12, color: '#999', marginBottom: 6 }}>时间范围</div>
-                      <Space size={8}>
-                        <input
-                          type="time"
-                          value={strategy.startTime}
-                          onChange={e => updateTimeStrategy(strategy.id, { startTime: e.target.value })}
-                          style={{
-                            padding: isMobile ? '6px 10px' : '8px 12px',
-                            border: '1px solid #d9d9d9',
-                            borderRadius: 6,
-                            fontSize: isMobile ? 13 : 14,
-                            width: isMobile ? 90 : 100
-                          }}
-                        />
-                        <span style={{ color: '#999' }}>至</span>
-                        <input
-                          type="time"
-                          value={strategy.endTime}
-                          onChange={e => updateTimeStrategy(strategy.id, { endTime: e.target.value })}
-                          style={{
-                            padding: isMobile ? '6px 10px' : '8px 12px',
-                            border: '1px solid #d9d9d9',
-                            borderRadius: 6,
-                            fontSize: isMobile ? 13 : 14,
-                            width: isMobile ? 90 : 100
-                          }}
-                        />
-                      </Space>
+                  )}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+                    <div style={{
+                      width: 32, height: 32, borderRadius: 6, background: '#fff',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      boxShadow: '0 2px 4px rgba(24,144,255,0.1)'
+                    }}>
+                      <FieldTimeOutlined style={{ fontSize: 16, color: '#1890ff' }} />
                     </div>
+                    <div style={{ fontSize: 14, fontWeight: 'bold', color: '#262626' }}>分时段配送</div>
+                  </div>
+                  <div style={{ fontSize: 12, color: '#8c8c8c', lineHeight: 1.6, paddingLeft: 42 }}>
+                    按早/午/晚等时段自动切换配送策略
+                  </div>
+                </div>
+              </Col>
 
-                    {/* 配送策略 */}
-                    <div>
-                      <div style={{ fontSize: 12, color: '#999', marginBottom: 6 }}>配送策略</div>
-                      <Select
-                        value={strategy.strategy}
-                        onChange={value => updateTimeStrategy(strategy.id, { strategy: value })}
-                        style={{ width: '100%' }}
-                        size={isMobile ? 'middle' : 'large'}
-                      >
-                        <Select.Option value="low-price">💰 低价优先</Select.Option>
-                        <Select.Option value="fastest">⚡ 速度优先</Select.Option>
-                        <Select.Option value="balanced">
-                          <span style={{ color: '#52c41a', fontWeight: 'bold' }}>⚖️ 平衡模式 (推荐)</span>
-                        </Select.Option>
-                      </Select>
+              {/* 按订单金额分级 */}
+              <Col xs={24} sm={12}>
+                <div
+                  onClick={() => setIntelligentSubStrategy('amount-based')}
+                  style={{
+                    padding: isMobile ? 14 : 16,
+                    background: intelligentSubStrategy === 'amount-based'
+                      ? 'linear-gradient(135deg, #fff7e6 0%, #fffbf0 100%)'
+                      : '#fafafa',
+                    borderRadius: 8,
+                    border: intelligentSubStrategy === 'amount-based'
+                      ? '2px solid #fa8c16'
+                      : '2px solid #e8e8e8',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s',
+                    position: 'relative'
+                  }}
+                  onMouseEnter={e => {
+                    if (intelligentSubStrategy !== 'amount-based') {
+                      e.currentTarget.style.borderColor = '#d9d9d9';
+                      e.currentTarget.style.transform = 'translateY(-2px)';
+                      e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.08)';
+                    }
+                  }}
+                  onMouseLeave={e => {
+                    if (intelligentSubStrategy !== 'amount-based') {
+                      e.currentTarget.style.borderColor = '#e8e8e8';
+                      e.currentTarget.style.transform = 'translateY(0)';
+                      e.currentTarget.style.boxShadow = 'none';
+                    }
+                  }}
+                >
+                  {intelligentSubStrategy === 'amount-based' && (
+                    <div style={{
+                      position: 'absolute', top: -1, right: -1,
+                      width: 0, height: 0, borderStyle: 'solid',
+                      borderWidth: '0 28px 28px 0',
+                      borderColor: 'transparent #fa8c16 transparent transparent',
+                      borderRadius: '0 6px 0 0'
+                    }}>
+                      <div style={{ position: 'absolute', top: 1, right: -24, color: '#fff', fontSize: 12 }}>✓</div>
                     </div>
-                  </Card>
-                ))}
-              </Space>
-
-              <Button
-                type="dashed"
-                icon={<PlusOutlined />}
-                onClick={addTimeStrategy}
-                block
-                size={isMobile ? 'middle' : 'large'}
-                style={{
-                  marginTop: 16,
-                  borderRadius: 8,
-                  height: isMobile ? 40 : 44
-                }}
-              >
-                添加时段规则
-              </Button>
-            </>
-          )}
-
-          <div style={{ marginTop: 12, padding: 8, background: '#f0f7ff', borderRadius: 4, fontSize: 12, color: '#666' }}>
-            💡 提示：系统会根据当前时间自动匹配对应时段的配送策略
-            {settings.enableOrderAmountTier && (
-              <span style={{ color: '#fa8c16', fontWeight: 'bold' }}>
-                {' '}（与订单金额分级同时启用时，按优先级设置执行）
-              </span>
-            )}
-          </div>
-        </Card>
+                  )}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+                    <div style={{
+                      width: 32, height: 32, borderRadius: 6, background: '#fff',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      boxShadow: '0 2px 4px rgba(250,140,22,0.1)'
+                    }}>
+                      <DollarOutlined style={{ fontSize: 16, color: '#fa8c16' }} />
+                    </div>
+                    <div style={{ fontSize: 14, fontWeight: 'bold', color: '#262626' }}>按订单金额分级</div>
+                  </div>
+                  <div style={{ fontSize: 12, color: '#8c8c8c', lineHeight: 1.6, paddingLeft: 42 }}>
+                    根据订单金额高低选择不同配送策略
+                  </div>
+                </div>
+              </Col>
+            </Row>
+          </Card>
         )}
 
-        {/* 订单金额分级配送 - 仅在平衡模式下显示 */}
-        {settings.dispatchStrategy === 'balanced' && (
-          <Card
-          size="small"
-          style={{
-            background: '#ffffff',
-            border: 'none',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.08)'
-          }}
-          bodyStyle={{ padding: isMobile ? 16 : 20 }}
-        >
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-            <div>
-              <div style={{ fontSize: 15, fontWeight: 'bold', color: '#262626', marginBottom: 4 }}>
-                <DollarOutlined style={{ marginRight: 8, color: '#1890ff' }} />
-                订单金额分级配送
-              </div>
-              <div style={{ fontSize: 12, color: '#8c8c8c', paddingLeft: 26 }}>
-                根据订单金额自动选择配送策略，高价值订单优先可靠性
-              </div>
-            </div>
-            <Switch
-              checked={settings.enableOrderAmountTier}
-              onChange={checked => updateSettings({ enableOrderAmountTier: checked })}
-              style={{
-                background: settings.enableOrderAmountTier ? '#52c41a' : undefined
-              }}
-            />
-          </div>
-
-          {settings.enableOrderAmountTier && (
-            <>
-              <Space direction="vertical" style={{ width: '100%' }} size={12}>
-                {settings.orderAmountTiers.map((tier, index) => (
-                  <Card
-                    key={tier.id}
-                    size="small"
-                    style={{
-                      background: '#ffffff',
-                      border: '1px solid #d9d9d9',
-                      borderRadius: 8
-                    }}
-                    bodyStyle={{ padding: isMobile ? 12 : 16 }}
-                  >
-                    {/* 头部：档位标题和删除按钮 */}
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                      <div style={{ fontWeight: 'bold', fontSize: isMobile ? 14 : 15, color: '#1890ff' }}>
-                        档位 {index + 1}
-                      </div>
-                      {settings.orderAmountTiers.length > 1 && (
-                        <Button
-                          type="text"
-                          danger
-                          size="small"
-                          icon={<DeleteOutlined />}
-                          onClick={() => removeAmountTier(tier.id)}
-                        />
-                      )}
-                    </div>
-
-                    {/* 金额范围 */}
-                    <div style={{ marginBottom: 12 }}>
-                      <div style={{ fontSize: 12, color: '#999', marginBottom: 6 }}>订单金额范围</div>
-                      <Space size={8}>
-                        <InputNumber
-                          min={0}
-                          max={tier.maxAmount - 1}
-                          value={tier.minAmount}
-                          onChange={value => updateAmountTier(tier.id, { minAmount: value || 0 })}
-                          style={{ width: isMobile ? 100 : 120 }}
-                          size={isMobile ? 'middle' : 'large'}
-                          prefix="¥"
-                        />
-                        <span style={{ color: '#999' }}>至</span>
-                        <InputNumber
-                          min={tier.minAmount + 1}
-                          max={999999}
-                          value={tier.maxAmount}
-                          onChange={value => updateAmountTier(tier.id, { maxAmount: value || 100 })}
-                          style={{ width: isMobile ? 100 : 120 }}
-                          size={isMobile ? 'middle' : 'large'}
-                          prefix="¥"
-                        />
-                      </Space>
-                    </div>
-
-                    {/* 配送策略 */}
-                    <div>
-                      <div style={{ fontSize: 12, color: '#999', marginBottom: 6 }}>配送策略</div>
-                      <Select
-                        value={tier.strategy}
-                        onChange={value => updateAmountTier(tier.id, { strategy: value })}
-                        style={{ width: '100%' }}
-                        size={isMobile ? 'middle' : 'large'}
-                      >
-                        <Select.Option value="low-price">💰 低价优先</Select.Option>
-                        <Select.Option value="fastest">⚡ 速度优先</Select.Option>
-                        <Select.Option value="balanced">
-                          <span style={{ color: '#52c41a', fontWeight: 'bold' }}>⚖️ 平衡模式 (推荐)</span>
-                        </Select.Option>
-                        <Select.Option value="reliable">🛡️ 品质保障</Select.Option>
-                      </Select>
-                    </div>
-                  </Card>
-                ))}
-              </Space>
-
-              <Button
-                type="dashed"
-                icon={<PlusOutlined />}
-                onClick={addAmountTier}
-                block
-                size={isMobile ? 'middle' : 'large'}
-                style={{
-                  marginTop: 16,
-                  borderRadius: 8,
-                  height: isMobile ? 40 : 44
-                }}
-              >
-                添加金额档位
-              </Button>
-            </>
-          )}
-
-          <div style={{ marginTop: 12, padding: 8, background: '#f0f7ff', borderRadius: 4, fontSize: 12, color: '#666' }}>
-            💡 提示：贵重物品或VIP客户订单建议选择"品质保障"策略，只选择零投诉、高评分的平台
-            {settings.enableTimeBasedStrategy && (
-              <span style={{ color: '#fa8c16', fontWeight: 'bold' }}>
-                {' '}（与分时段策略同时启用时，按优先级设置执行）
-              </span>
-            )}
-          </div>
-        </Card>
-        )}
-
-        {/* 策略优先级设置 - 仅在平衡模式下且两个策略都启用时显示 */}
-        {settings.dispatchStrategy === 'balanced' && settings.enableTimeBasedStrategy && settings.enableOrderAmountTier && (
+        {/* 分时段配送策略配置 */}
+        {settings.dispatchStrategy === 'balanced' && intelligentSubStrategy === 'time-based' && (
           <Card
             size="small"
-            style={{
-              background: 'linear-gradient(135deg, #fff7e6 0%, #ffe7ba 100%)',
-              border: '2px solid #ffa940'
-            }}
+            style={{ background: '#ffffff', border: 'none', boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }}
+            styles={{ body: { padding: isMobile ? 16 : 20 } }}
           >
-            <div style={{ marginBottom: 12 }}>
-              <div style={{ fontSize: 14, fontWeight: 'bold', color: '#fa8c16', marginBottom: 8 }}>
-                ⚠️ 策略冲突处理
-              </div>
-              <div style={{ fontSize: 12, color: '#666', marginBottom: 12, lineHeight: 1.6 }}>
-                当分时段策略和订单金额分级同时启用时，可能会产生冲突。例如：某时段设置为"低价优先"，但该时段内的高价值订单按金额分级应选择"速度优先"。
-              </div>
+            <div style={{ fontSize: 15, fontWeight: 'bold', color: '#262626', marginBottom: 16 }}>
+              <FieldTimeOutlined style={{ marginRight: 8, color: '#1890ff' }} />
+              分时段配送策略
             </div>
 
-            <div>
-              <div style={{ fontSize: 13, fontWeight: 'bold', marginBottom: 8 }}>策略优先级</div>
-              <Radio.Group
-                value={settings.strategyPriority}
-                onChange={e => updateSettings({ strategyPriority: e.target.value })}
-                style={{ width: '100%' }}
-              >
-                <Space direction="vertical" style={{ width: '100%' }}>
-                  <Radio value="amount-based">
-                    <Space>
-                      <span style={{ fontWeight: 'bold' }}>订单金额优先</span>
-                      <Tag color="success">推荐</Tag>
-                    </Space>
-                    <div style={{ fontSize: 11, color: '#666', marginLeft: 24, marginTop: 4 }}>
-                      优先按订单金额分级选择策略，高价值订单获得更好的配送服务
+            {/* 列表头 - 仅桌面端 */}
+            {!isMobile && (
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: '32px 1fr 160px 1fr 32px',
+                gap: 8,
+                padding: '0 4px 8px',
+                borderBottom: '1px solid #f0f0f0',
+                fontSize: 12,
+                color: '#bfbfbf',
+                fontWeight: 500
+              }}>
+                <span />
+                <span>时段名称</span>
+                <span>时间范围</span>
+                <span>配送策略</span>
+                <span />
+              </div>
+            )}
+
+            <div style={{ marginTop: isMobile ? 0 : 4 }}>
+              {settings.timeBasedStrategies.map((strategy, index) => (
+                <div
+                  key={strategy.id}
+                  style={{
+                    display: isMobile ? 'block' : 'grid',
+                    gridTemplateColumns: '32px 1fr 160px 1fr 32px',
+                    gap: 8,
+                    alignItems: 'center',
+                    padding: isMobile ? '12px 0' : '10px 4px',
+                    borderBottom: index < settings.timeBasedStrategies.length - 1 ? '1px solid #f5f5f5' : 'none',
+                    opacity: strategy.enabled ? 1 : 0.5,
+                    transition: 'opacity 0.2s'
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', marginBottom: isMobile ? 10 : 0, justifyContent: isMobile ? 'space-between' : 'flex-start' }}>
+                    <Switch
+                      checked={strategy.enabled}
+                      onChange={checked => updateTimeStrategy(strategy.id, { enabled: checked })}
+                      size="small"
+                    />
+                    {isMobile && settings.timeBasedStrategies.length > 1 && (
+                      <Button type="text" danger size="small" icon={<DeleteOutlined />}
+                        onClick={() => removeTimeStrategy(strategy.id)} />
+                    )}
+                  </div>
+
+                  <div style={{ marginBottom: isMobile ? 8 : 0 }}>
+                    {isMobile && <div style={{ fontSize: 11, color: '#bfbfbf', marginBottom: 4 }}>时段名称</div>}
+                    <Input
+                      value={strategy.name}
+                      onChange={e => updateTimeStrategy(strategy.id, { name: e.target.value })}
+                      size="small"
+                      style={{ borderRadius: 6 }}
+                      placeholder="时段名称"
+                    />
+                  </div>
+
+                  <div style={{ marginBottom: isMobile ? 8 : 0 }}>
+                    {isMobile && <div style={{ fontSize: 11, color: '#bfbfbf', marginBottom: 4 }}>时间范围</div>}
+                    <TimePicker.RangePicker
+                      value={[
+                        strategy.startTime ? dayjs(strategy.startTime, 'HH:mm') : null,
+                        strategy.endTime ? dayjs(strategy.endTime, 'HH:mm') : null
+                      ]}
+                      format="HH:mm"
+                      minuteStep={15}
+                      size="small"
+                      style={{ width: '100%', borderRadius: 6 }}
+                      onChange={times => {
+                        if (times) {
+                          updateTimeStrategy(strategy.id, {
+                            startTime: times[0]?.format('HH:mm') ?? '',
+                            endTime: times[1]?.format('HH:mm') ?? ''
+                          });
+                        }
+                      }}
+                    />
+                  </div>
+
+                  <div>
+                    {isMobile && <div style={{ fontSize: 11, color: '#bfbfbf', marginBottom: 4 }}>配送策略</div>}
+                    <Select
+                      value={strategy.strategy}
+                      onChange={value => updateTimeStrategy(strategy.id, { strategy: value })}
+                      size="small"
+                      style={{ width: '100%', borderRadius: 6 }}
+                    >
+                      <Select.Option value="low-price">💰 低价优先</Select.Option>
+                      <Select.Option value="fastest">⚡ 速度优先</Select.Option>
+                    </Select>
+                  </div>
+
+                  {!isMobile && (
+                    <div>
+                      {settings.timeBasedStrategies.length > 1 ? (
+                        <Button type="text" danger size="small" icon={<DeleteOutlined />}
+                          onClick={() => removeTimeStrategy(strategy.id)} />
+                      ) : <span />}
                     </div>
-                  </Radio>
-                  <Radio value="time-based">
-                    <span style={{ fontWeight: 'bold' }}>时段策略优先</span>
-                    <div style={{ fontSize: 11, color: '#666', marginLeft: 24, marginTop: 4 }}>
-                      优先按时段策略选择，适合有明确时段配送需求的场景
-                    </div>
-                  </Radio>
-                </Space>
-              </Radio.Group>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            <Button
+              type="dashed"
+              icon={<PlusOutlined />}
+              onClick={addTimeStrategy}
+              block
+              size="small"
+              style={{ marginTop: 12, borderRadius: 6, height: 36, color: '#1890ff', borderColor: '#91caff' }}
+            >
+              添加时段规则
+            </Button>
+
+            <div style={{ marginTop: 10, padding: '6px 10px', background: '#f0f7ff', borderRadius: 6, fontSize: 12, color: '#666', display: 'flex', alignItems: 'flex-start', gap: 6 }}>
+              <span>💡</span>
+              <span>系统会根据当前时间自动匹配对应时段的配送策略</span>
             </div>
           </Card>
         )}
+
+        {/* 订单金额分级配置 */}
+        {settings.dispatchStrategy === 'balanced' && intelligentSubStrategy === 'amount-based' && (
+          <Card
+            size="small"
+            style={{ background: '#ffffff', border: 'none', boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }}
+            styles={{ body: { padding: isMobile ? 16 : 20 } }}
+          >
+            <div style={{ fontSize: 15, fontWeight: 'bold', color: '#262626', marginBottom: 16 }}>
+              <DollarOutlined style={{ marginRight: 8, color: '#fa8c16' }} />
+              按订单金额分级配送
+            </div>
+
+            {/* 列表头 - 仅桌面端 */}
+            {!isMobile && (
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: '48px 1fr 1fr 32px',
+                gap: 8,
+                padding: '0 4px 8px',
+                borderBottom: '1px solid #f0f0f0',
+                fontSize: 12,
+                color: '#bfbfbf',
+                fontWeight: 500
+              }}>
+                <span>档位</span>
+                <span>金额范围</span>
+                <span>配送策略</span>
+                <span />
+              </div>
+            )}
+
+            <div style={{ marginTop: isMobile ? 0 : 4 }}>
+              {settings.orderAmountTiers.map((tier, index) => (
+                <div
+                  key={tier.id}
+                  style={{
+                    display: isMobile ? 'block' : 'grid',
+                    gridTemplateColumns: '48px 1fr 1fr 32px',
+                    gap: 8,
+                    alignItems: 'center',
+                    padding: isMobile ? '12px 0' : '10px 4px',
+                    borderBottom: index < settings.orderAmountTiers.length - 1 ? '1px solid #f5f5f5' : 'none'
+                  }}
+                >
+                  {/* 档位标签 */}
+                  <div style={{ display: 'flex', alignItems: 'center', marginBottom: isMobile ? 10 : 0, justifyContent: isMobile ? 'space-between' : 'flex-start' }}>
+                    <div style={{ fontSize: 13, fontWeight: 'bold', color: '#fa8c16' }}>
+                      档位{index + 1}
+                    </div>
+                    {isMobile && settings.orderAmountTiers.length > 1 && (
+                      <Button type="text" danger size="small" icon={<DeleteOutlined />}
+                        onClick={() => removeAmountTier(tier.id)} />
+                    )}
+                  </div>
+
+                  {/* 金额范围 */}
+                  <div style={{ marginBottom: isMobile ? 8 : 0 }}>
+                    {isMobile && <div style={{ fontSize: 11, color: '#bfbfbf', marginBottom: 4 }}>金额范围</div>}
+                    <Space size={4}>
+                      <InputNumber
+                        min={0} max={tier.maxAmount - 1}
+                        value={tier.minAmount}
+                        onChange={value => updateAmountTier(tier.id, { minAmount: value || 0 })}
+                        style={{ width: isMobile ? 90 : 100 }}
+                        size="small"
+                        prefix="¥"
+                      />
+                      <span style={{ color: '#999', fontSize: 12 }}>至</span>
+                      <InputNumber
+                        min={tier.minAmount + 1} max={999999}
+                        value={tier.maxAmount}
+                        onChange={value => updateAmountTier(tier.id, { maxAmount: value || 100 })}
+                        style={{ width: isMobile ? 90 : 100 }}
+                        size="small"
+                        prefix="¥"
+                      />
+                    </Space>
+                  </div>
+
+                  {/* 配送策略 */}
+                  <div style={{ marginBottom: isMobile ? 0 : 0 }}>
+                    {isMobile && <div style={{ fontSize: 11, color: '#bfbfbf', marginBottom: 4 }}>配送策略</div>}
+                    <Select
+                      value={tier.strategy}
+                      onChange={value => updateAmountTier(tier.id, { strategy: value })}
+                      size="small"
+                      style={{ width: '100%', borderRadius: 6 }}
+                    >
+                      <Select.Option value="low-price">💰 低价优先</Select.Option>
+                      <Select.Option value="fastest">⚡ 速度优先</Select.Option>
+                      <Select.Option value="custom-platform">🚚 制定运力</Select.Option>
+                    </Select>
+                    {/* 制定运力 - 平台选择器 */}
+                    {tier.strategy === 'custom-platform' && (
+                      <Select
+                        value={tier.platformPreference}
+                        onChange={value => updateAmountTier(tier.id, { platformPreference: value })}
+                        placeholder="选择运力平台"
+                        size="small"
+                        style={{ width: '100%', marginTop: 6, borderRadius: 6 }}
+                      >
+                        <Select.Option value="dada">达达配送</Select.Option>
+                        <Select.Option value="sf">顺丰同城</Select.Option>
+                        <Select.Option value="shansong">闪送</Select.Option>
+                      </Select>
+                    )}
+                  </div>
+
+                  {/* 删除 - 仅桌面端 */}
+                  {!isMobile && (
+                    <div>
+                      {settings.orderAmountTiers.length > 1 ? (
+                        <Button type="text" danger size="small" icon={<DeleteOutlined />}
+                          onClick={() => removeAmountTier(tier.id)} />
+                      ) : <span />}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            <Button
+              type="dashed"
+              icon={<PlusOutlined />}
+              onClick={addAmountTier}
+              block
+              size="small"
+              style={{ marginTop: 12, borderRadius: 6, height: 36, color: '#fa8c16', borderColor: '#ffd591' }}
+            >
+              添加金额档位
+            </Button>
+
+            <div style={{ marginTop: 12, padding: '6px 10px', background: '#f0f7ff', borderRadius: 6, fontSize: 12, color: '#666', display: 'flex', alignItems: 'flex-start', gap: 6 }}>
+              <span>💡</span>
+              <span>贵重物品或VIP客户订单建议选择"品质保障"策略，只选择零投诉、高评分的平台</span>
+            </div>
+          </Card>
+        )}
+
 
         {/* 多平台并发询价 */}
         <Card
