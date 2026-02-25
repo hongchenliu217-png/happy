@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Form, Input, Button, Card, message, Row, Col, Statistic } from 'antd';
 import { UserOutlined, LockOutlined, ThunderboltOutlined, RocketOutlined, SafetyOutlined, TeamOutlined } from '@ant-design/icons';
 import client from '../api/client';
@@ -6,7 +6,14 @@ import { useAuthStore } from '../store/auth';
 
 export default function Login() {
   const [loading, setLoading] = useState(false);
+  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
   const { setAuth } = useAuthStore();
+
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth <= 768);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   const handleLogin = async (values: any) => {
     setLoading(true);
@@ -53,13 +60,14 @@ export default function Login() {
   return (
     <div style={{
       display: 'flex',
+      flexDirection: isMobile ? 'column' : 'row',
       minHeight: '100vh',
       background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
     }}>
       {/* 左侧品牌展示区 */}
       <div style={{
-        flex: 1,
-        display: 'flex',
+        flex: isMobile ? 'none' : 1,
+        display: isMobile ? 'none' : 'flex',
         flexDirection: 'column',
         justifyContent: 'center',
         alignItems: 'center',
@@ -215,44 +223,44 @@ export default function Login() {
 
       {/* 右侧登录表单区 */}
       <div style={{
-        width: '480px',
+        width: isMobile ? '100%' : '480px',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        padding: '40px',
+        padding: isMobile ? '20px' : '40px',
         background: 'white'
       }}>
         <Card
           style={{
             width: '100%',
-            maxWidth: 400,
+            maxWidth: isMobile ? '100%' : 400,
             boxShadow: 'none',
             border: 'none'
           }}
         >
-          <div style={{ textAlign: 'center', marginBottom: 40 }}>
+          <div style={{ textAlign: 'center', marginBottom: isMobile ? 30 : 40 }}>
             <div style={{
-              width: 64,
-              height: 64,
+              width: isMobile ? 56 : 64,
+              height: isMobile ? 56 : 64,
               margin: '0 auto 20px',
               background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
               borderRadius: 16,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              fontSize: 32,
+              fontSize: isMobile ? 28 : 32,
               color: 'white',
               fontWeight: 'bold'
             }}>
               易
             </div>
-            <h1 style={{ fontSize: 28, marginBottom: 8, fontWeight: 'bold', color: '#1a1a1a' }}>
+            <h1 style={{ fontSize: isMobile ? 24 : 28, marginBottom: 8, fontWeight: 'bold', color: '#1a1a1a' }}>
               欢迎回来
             </h1>
             <p style={{ color: '#999', fontSize: 14 }}>登录您的易送账户</p>
           </div>
 
-          <Form onFinish={handleLogin} size="large">
+          <Form onFinish={handleLogin} size={isMobile ? 'middle' : 'large'}>
             <Form.Item name="username" rules={[{ required: true, message: '请输入用户名' }]}>
               <Input
                 prefix={<UserOutlined style={{ color: '#999' }} />}
@@ -274,9 +282,9 @@ export default function Login() {
                 loading={loading}
                 block
                 style={{
-                  height: 48,
+                  height: isMobile ? 44 : 48,
                   borderRadius: 8,
-                  fontSize: 16,
+                  fontSize: isMobile ? 15 : 16,
                   fontWeight: 'bold',
                   background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
                   border: 'none'
@@ -293,7 +301,7 @@ export default function Login() {
             loading={loading}
             block
             style={{
-              height: 48,
+              height: isMobile ? 44 : 48,
               borderRadius: 8,
               fontSize: 14,
               marginTop: 12

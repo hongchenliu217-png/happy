@@ -43,12 +43,19 @@ export default function Orders() {
   const [dispatchModalVisible, setDispatchModalVisible] = useState(false);
   const [selectedPlatform, setSelectedPlatform] = useState<string>('');
   const [platformPrices, setPlatformPrices] = useState<any[]>([]);
+  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
 
   useEffect(() => {
     loadOrders();
     loadPlatforms();
     const interval = setInterval(loadOrders, 3000);
     return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth <= 768);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
   }, []);
 
   const loadOrders = async () => {
@@ -215,12 +222,12 @@ export default function Orders() {
     <Card
       key={order.id}
       style={{
-        marginBottom: 12,
-        borderRadius: 12,
+        marginBottom: isMobile ? 10 : 12,
+        borderRadius: isMobile ? 8 : 12,
         boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
         border: '1px solid #f0f0f0'
       }}
-      bodyStyle={{ padding: 16 }}
+      bodyStyle={{ padding: isMobile ? 12 : 16 }}
     >
       {/* 订单头部 */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
@@ -311,14 +318,15 @@ export default function Orders() {
                 type="primary"
                 icon={<RocketOutlined />}
                 block
-                size="large"
+                size={isMobile ? 'middle' : 'large'}
                 onClick={() => handleCallDelivery(order)}
                 style={{
                   background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
                   border: 'none',
-                  height: 44,
+                  height: isMobile ? 40 : 44,
                   borderRadius: 8,
-                  fontWeight: 'bold'
+                  fontWeight: 'bold',
+                  fontSize: isMobile ? 13 : 14
                 }}
               >
                 发起配送
@@ -328,13 +336,14 @@ export default function Orders() {
               <Button
                 icon={<CheckOutlined />}
                 block
-                size="large"
+                size={isMobile ? 'middle' : 'large'}
                 onClick={() => handleMealReady(order)}
                 style={{
-                  height: 44,
+                  height: isMobile ? 40 : 44,
                   borderRadius: 8,
                   borderColor: '#d9d9d9',
-                  color: '#666'
+                  color: '#666',
+                  fontSize: isMobile ? 13 : 14
                 }}
               >
                 出餐
@@ -347,25 +356,26 @@ export default function Orders() {
           <>
             <div style={{
               textAlign: 'center',
-              padding: '12px',
+              padding: isMobile ? '10px' : '12px',
               background: 'linear-gradient(135deg, #e6f7ff 0%, #bae7ff 100%)',
               borderRadius: 8,
               marginBottom: 4
             }}>
-              <span style={{ color: '#1890ff', fontSize: 13, fontWeight: 'bold' }}>
+              <span style={{ color: '#1890ff', fontSize: isMobile ? 12 : 13, fontWeight: 'bold' }}>
                 ⏳ 等待骑手接单...
               </span>
             </div>
             <Button
               icon={<CheckOutlined />}
               block
-              size="large"
+              size={isMobile ? 'middle' : 'large'}
               onClick={() => handleMealReady(order)}
               style={{
-                height: 44,
+                height: isMobile ? 40 : 44,
                 borderRadius: 8,
                 borderColor: '#d9d9d9',
-                color: '#666'
+                color: '#666',
+                fontSize: isMobile ? 13 : 14
               }}
             >
               出餐
@@ -377,12 +387,12 @@ export default function Orders() {
           <>
             <div style={{
               textAlign: 'center',
-              padding: '12px',
+              padding: isMobile ? '10px' : '12px',
               background: 'linear-gradient(135deg, #f6ffed 0%, #d9f7be 100%)',
               borderRadius: 8,
               marginBottom: 4
             }}>
-              <span style={{ color: '#52c41a', fontSize: 13, fontWeight: 'bold' }}>
+              <span style={{ color: '#52c41a', fontSize: isMobile ? 12 : 13, fontWeight: 'bold' }}>
                 ✓ 骑手已接单
               </span>
             </div>
@@ -390,14 +400,15 @@ export default function Orders() {
               type="primary"
               icon={<CheckOutlined />}
               block
-              size="large"
+              size={isMobile ? 'middle' : 'large'}
               onClick={() => handleMealReady(order)}
               style={{
                 background: '#52c41a',
                 borderColor: '#52c41a',
-                height: 44,
+                height: isMobile ? 40 : 44,
                 borderRadius: 8,
-                fontWeight: 'bold'
+                fontWeight: 'bold',
+                fontSize: isMobile ? 13 : 14
               }}
             >
               出餐
@@ -408,11 +419,11 @@ export default function Orders() {
         {['ready', 'picked_up', 'delivering'].includes(order.status) && (
           <div style={{
             textAlign: 'center',
-            padding: '12px',
+            padding: isMobile ? '10px' : '12px',
             background: 'linear-gradient(135deg, #f6ffed 0%, #d9f7be 100%)',
             borderRadius: 8
           }}>
-            <span style={{ color: '#52c41a', fontSize: 13, fontWeight: 'bold' }}>
+            <span style={{ color: '#52c41a', fontSize: isMobile ? 12 : 13, fontWeight: 'bold' }}>
               ✓ {statusMap[order.status]?.text}
             </span>
           </div>
@@ -421,11 +432,11 @@ export default function Orders() {
         {order.status === 'delivered' && (
           <div style={{
             textAlign: 'center',
-            padding: '16px',
+            padding: isMobile ? '14px' : '16px',
             background: 'linear-gradient(135deg, #f6ffed 0%, #d9f7be 100%)',
             borderRadius: 8
           }}>
-            <span style={{ color: '#52c41a', fontSize: 15, fontWeight: 'bold' }}>
+            <span style={{ color: '#52c41a', fontSize: isMobile ? 14 : 15, fontWeight: 'bold' }}>
               ✓ 订单已完成
             </span>
           </div>
@@ -449,81 +460,81 @@ export default function Orders() {
   return (
     <div style={{ background: '#f5f5f5', minHeight: '100vh', paddingBottom: 20 }}>
       {/* 数据概览卡片 */}
-      <div style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', padding: '20px 16px' }}>
+      <div style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', padding: isMobile ? '16px 12px' : '20px 16px' }}>
         <Row gutter={[12, 12]}>
-          <Col span={6}>
+          <Col xs={12} sm={12} md={6}>
             <Card
               size="small"
               style={{
-                borderRadius: 12,
+                borderRadius: isMobile ? 8 : 12,
                 border: 'none',
                 background: 'rgba(255,255,255,0.95)',
                 boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
               }}
-              bodyStyle={{ padding: '16px 12px' }}
+              bodyStyle={{ padding: isMobile ? '12px 8px' : '16px 12px' }}
             >
               <Statistic
-                title={<span style={{ fontSize: 12, color: '#666' }}>今日订单</span>}
+                title={<span style={{ fontSize: isMobile ? 11 : 12, color: '#666' }}>今日订单</span>}
                 value={stats.total}
-                prefix={<ShoppingOutlined style={{ color: '#1890ff' }} />}
-                valueStyle={{ fontSize: 24, fontWeight: 'bold', color: '#1890ff' }}
+                prefix={<ShoppingOutlined style={{ color: '#1890ff', fontSize: isMobile ? 16 : 20 }} />}
+                valueStyle={{ fontSize: isMobile ? 20 : 24, fontWeight: 'bold', color: '#1890ff' }}
               />
             </Card>
           </Col>
-          <Col span={6}>
+          <Col xs={12} sm={12} md={6}>
             <Card
               size="small"
               style={{
-                borderRadius: 12,
+                borderRadius: isMobile ? 8 : 12,
                 border: 'none',
                 background: 'rgba(255,255,255,0.95)',
                 boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
               }}
-              bodyStyle={{ padding: '16px 12px' }}
+              bodyStyle={{ padding: isMobile ? '12px 8px' : '16px 12px' }}
             >
               <Statistic
-                title={<span style={{ fontSize: 12, color: '#666' }}>待处理</span>}
+                title={<span style={{ fontSize: isMobile ? 11 : 12, color: '#666' }}>待处理</span>}
                 value={stats.pending}
-                prefix={<WarningOutlined style={{ color: '#faad14' }} />}
-                valueStyle={{ fontSize: 24, fontWeight: 'bold', color: '#faad14' }}
+                prefix={<WarningOutlined style={{ color: '#faad14', fontSize: isMobile ? 16 : 20 }} />}
+                valueStyle={{ fontSize: isMobile ? 20 : 24, fontWeight: 'bold', color: '#faad14' }}
               />
             </Card>
           </Col>
-          <Col span={6}>
+          <Col xs={12} sm={12} md={6}>
             <Card
               size="small"
               style={{
-                borderRadius: 12,
+                borderRadius: isMobile ? 8 : 12,
                 border: 'none',
                 background: 'rgba(255,255,255,0.95)',
                 boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
               }}
-              bodyStyle={{ padding: '16px 12px' }}
+              bodyStyle={{ padding: isMobile ? '12px 8px' : '16px 12px' }}
             >
               <Statistic
-                title={<span style={{ fontSize: 12, color: '#666' }}>配送中</span>}
+                title={<span style={{ fontSize: isMobile ? 11 : 12, color: '#666' }}>配送中</span>}
                 value={stats.delivering}
-                prefix={<TruckOutlined style={{ color: '#52c41a' }} />}
-                valueStyle={{ fontSize: 24, fontWeight: 'bold', color: '#52c41a' }}
+                prefix={<TruckOutlined style={{ color: '#52c41a', fontSize: isMobile ? 16 : 20 }} />}
+                valueStyle={{ fontSize: isMobile ? 20 : 24, fontWeight: 'bold', color: '#52c41a' }}
               />
             </Card>
           </Col>
-          <Col span={6}>
+          <Col xs={12} sm={12} md={6}>
             <Card
               size="small"
               style={{
-                borderRadius: 12,
+                borderRadius: isMobile ? 8 : 12,
                 border: 'none',
                 background: 'rgba(255,255,255,0.95)',
                 boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
               }}
-              bodyStyle={{ padding: '16px 12px' }}
+              bodyStyle={{ padding: isMobile ? '12px 8px' : '16px 12px' }}
             >
               <Statistic
-                title={<span style={{ fontSize: 12, color: '#666' }}>今日营收</span>}
+                title={<span style={{ fontSize: isMobile ? 11 : 12, color: '#666' }}>今日营收</span>}
                 value={stats.totalAmount}
-                prefix={<DollarOutlined style={{ color: '#ff4d4f' }} />}
-                valueStyle={{ fontSize: 24, fontWeight: 'bold', color: '#ff4d4f' }}
+                prefix={<DollarOutlined style={{ color: '#ff4d4f', fontSize: isMobile ? 16 : 20 }} />}
+                valueStyle={{ fontSize: isMobile ? 20 : 24, fontWeight: 'bold', color: '#ff4d4f' }}
                 precision={2}
               />
             </Card>
@@ -532,32 +543,32 @@ export default function Orders() {
       </div>
 
       {/* 标签页 */}
-      <div style={{ background: '#fff', position: 'sticky', top: 64, zIndex: 999, boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
+      <div style={{ background: '#fff', position: 'sticky', top: isMobile ? 0 : 64, zIndex: 999, boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
         <Tabs
           activeKey={activeTab}
           onChange={setActiveTab}
           items={tabItems}
           style={{ margin: 0 }}
-          tabBarStyle={{ margin: '0 16px', paddingTop: 8 }}
+          tabBarStyle={{ margin: isMobile ? '0 8px' : '0 16px', paddingTop: 8, fontSize: isMobile ? 13 : 14 }}
         />
       </div>
 
       {/* 订单列表 */}
-      <div style={{ padding: '16px' }}>
+      <div style={{ padding: isMobile ? '12px' : '16px' }}>
         {/* 快捷操作按钮 */}
-        <div style={{ marginBottom: 16 }}>
+        <div style={{ marginBottom: isMobile ? 12 : 16 }}>
           <Button
             type="primary"
             icon={<PlusOutlined />}
             onClick={simulateOrder}
             loading={loading}
             block
-            size="large"
+            size={isMobile ? 'middle' : 'large'}
             style={{
-              height: 52,
-              fontSize: 16,
+              height: isMobile ? 44 : 52,
+              fontSize: isMobile ? 14 : 16,
               fontWeight: 'bold',
-              borderRadius: 12,
+              borderRadius: isMobile ? 8 : 12,
               background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
               border: 'none',
               boxShadow: '0 4px 12px rgba(102, 126, 234, 0.4)'
@@ -595,7 +606,7 @@ export default function Orders() {
       {/* 派单弹窗 */}
       <Modal
         title={
-          <div style={{ fontSize: 18, fontWeight: 'bold' }}>
+          <div style={{ fontSize: isMobile ? 16 : 18, fontWeight: 'bold' }}>
             <RocketOutlined style={{ marginRight: 8, color: '#1890ff' }} />
             选择运力平台
           </div>
@@ -609,13 +620,13 @@ export default function Orders() {
         footer={
           <Button
             type="primary"
-            size="large"
+            size={isMobile ? 'middle' : 'large'}
             block
             onClick={confirmDispatch}
             disabled={!selectedPlatform}
             style={{
-              height: 48,
-              fontSize: 16,
+              height: isMobile ? 44 : 48,
+              fontSize: isMobile ? 15 : 16,
               fontWeight: 'bold',
               borderRadius: 8,
               background: selectedPlatform ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' : undefined,
@@ -625,11 +636,11 @@ export default function Orders() {
             确认派单
           </Button>
         }
-        width="90%"
+        width={isMobile ? '95%' : '90%'}
         style={{ maxWidth: 500 }}
       >
         <div style={{ marginBottom: 16 }}>
-          <p style={{ marginBottom: 16, color: '#666', fontSize: 14, fontWeight: 'bold' }}>
+          <p style={{ marginBottom: 16, color: '#666', fontSize: isMobile ? 13 : 14, fontWeight: 'bold' }}>
             各平台实时报价：
           </p>
 
@@ -646,7 +657,7 @@ export default function Orders() {
                   style={{
                     width: '100%',
                     height: 'auto',
-                    padding: 16,
+                    padding: isMobile ? 12 : 16,
                     borderRadius: 8,
                     border: selectedPlatform === platform.code ? '2px solid #1890ff' : '1px solid #d9d9d9',
                     background: selectedPlatform === platform.code ? '#e6f7ff' : 'white'
@@ -654,20 +665,20 @@ export default function Orders() {
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div>
-                      <div style={{ fontSize: 16, fontWeight: 'bold', marginBottom: 4 }}>
+                      <div style={{ fontSize: isMobile ? 14 : 16, fontWeight: 'bold', marginBottom: 4 }}>
                         {platform.name}
                       </div>
-                      <Space size={16}>
-                        <span style={{ fontSize: 12, color: '#999' }}>
+                      <Space size={isMobile ? 12 : 16}>
+                        <span style={{ fontSize: isMobile ? 11 : 12, color: '#999' }}>
                           预计 {platform.estimatedTime} 分钟
                         </span>
-                        <span style={{ fontSize: 12, color: '#999' }}>
+                        <span style={{ fontSize: isMobile ? 11 : 12, color: '#999' }}>
                           {platform.distance} 公里
                         </span>
                       </Space>
                     </div>
                     <div style={{ textAlign: 'right' }}>
-                      <div style={{ fontSize: 24, fontWeight: 'bold', color: '#ff4d4f' }}>
+                      <div style={{ fontSize: isMobile ? 20 : 24, fontWeight: 'bold', color: '#ff4d4f' }}>
                         ¥{platform.price}
                       </div>
                     </div>
