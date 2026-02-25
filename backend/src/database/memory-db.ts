@@ -1,3 +1,5 @@
+import bcrypt from 'bcrypt';
+
 // 简化版内存数据存储
 export const db = {
   users: [] as any[],
@@ -61,7 +63,20 @@ export const db = {
   statistics: [] as any[]
 };
 
-export const initDb = () => {
-  console.log('内存数据库已初始化');
-  return Promise.resolve();
+export const initDb = async () => {
+  // 预置 demo 演示账号
+  const hashedPassword = await bcrypt.hash('demo123', 10);
+  db.users.push({
+    id: 'demo-user-001',
+    username: 'demo',
+    email: 'demo@example.com',
+    password: hashedPassword,
+    phone: '13800138000',
+    companyName: '演示商家',
+    role: 'merchant',
+    status: 'active',
+    createdAt: new Date(),
+    updatedAt: new Date()
+  });
+  console.log('内存数据库已初始化，demo 账号已预置');
 };
