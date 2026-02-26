@@ -122,6 +122,45 @@ delivery-saas-platform/
 
 ---
 
-**最后更新**: 2026-02-13
-**当前版本**: v1.0.2
+## 2026-02-26 工作记录
+
+### 一、Bug 修复
+
+#### 演示账号登录失败修复
+
+**问题**: 点击"快速体验（演示账号）"或手动输入 demo/demo123 登录时报错，无法进入系统。
+
+**根因**: 后端缺少 `.env` 配置文件，导致 `JWT_SECRET` 为 `undefined`，JWT 签名时抛出异常，登录接口返回 500 错误。
+
+**修复方案**: 创建 `backend/.env` 文件，配置必要的环境变量：
+- `JWT_SECRET` — JWT 签名密钥
+- `JWT_EXPIRES_IN` — Token 有效期 7 天
+- `FRONTEND_URL` — 前端地址（Socket.IO CORS）
+- `PORT` — 后端端口 3000
+
+**验证**: 重启后端服务后，demo/demo123 登录成功，JWT Token 正常签发。
+
+#### JWT 默认值兜底修复
+
+**问题**: `backend/.env` 被 `.gitignore` 忽略，克隆仓库后没有 `.env` 文件，`JWT_SECRET` 为 `undefined` 导致登录必定失败。
+
+**修复方案**: 在 `auth.controller.ts` 和 `auth.middleware.ts` 中为 `JWT_SECRET` 和 `JWT_EXPIRES_IN` 添加默认值兜底，确保无 `.env` 也能正常运行：
+```typescript
+const JWT_SECRET = process.env.JWT_SECRET || 'yisong_default_secret_key';
+const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
+```
+
+**修改文件**:
+- `backend/src/controllers/auth.controller.ts`
+- `backend/src/middleware/auth.middleware.ts`
+
+### 二、版本信息
+
+- **当前版本**: v1.0.4
+- **修复文件**: `backend/.env`（新增）、`auth.controller.ts`（修改）、`auth.middleware.ts`（修改）
+
+---
+
+**最后更新**: 2026-02-26
+**当前版本**: v1.0.4
 **开发环境**: http://localhost:5173

@@ -5,6 +5,9 @@ import jwt from 'jsonwebtoken';
 import { logger } from '../utils/logger';
 import { v4 as uuidv4 } from 'uuid';
 
+const JWT_SECRET = process.env.JWT_SECRET || 'yisong_default_secret_key';
+const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
+
 function uuid() {
   return Date.now().toString(36) + Math.random().toString(36).substr(2);
 }
@@ -39,8 +42,8 @@ export class AuthController {
 
       const token = jwt.sign(
         { userId: user.id, role: user.role },
-        process.env.JWT_SECRET!,
-        { expiresIn: process.env.JWT_EXPIRES_IN }
+        JWT_SECRET,
+        { expiresIn: JWT_EXPIRES_IN }
       );
 
       res.status(201).json({
@@ -77,8 +80,8 @@ export class AuthController {
 
       const token = jwt.sign(
         { userId: user.id, role: user.role },
-        process.env.JWT_SECRET!,
-        { expiresIn: process.env.JWT_EXPIRES_IN }
+        JWT_SECRET,
+        { expiresIn: JWT_EXPIRES_IN }
       );
 
       res.json({
