@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { useLocation } from 'react-router-dom';
 import {
   Card,
   Switch,
@@ -24,9 +25,7 @@ import {
   FieldTimeOutlined,
   RocketOutlined,
   CheckCircleFilled,
-  SwapOutlined,
-  PauseCircleOutlined,
-  PlayCircleOutlined
+  SwapOutlined
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 
@@ -72,13 +71,6 @@ interface NoRiderEscalation {
   tipIncrementRounds: number;
 }
 
-interface PauseOrder {
-  paused: boolean;
-  autoResumeEnabled: boolean;
-  autoResumeMinutes: number;
-  pauseReason: string;
-}
-
 interface DeliverySettings {
   dispatchStrategy: 'low-price' | 'fastest' | 'balanced' | 'custom';
   platformPriority: string[];
@@ -105,7 +97,6 @@ interface DeliverySettings {
   smartDispatch: boolean;
   peakHourBoost: boolean;
   noRiderEscalation: NoRiderEscalation;
-  pauseOrder: PauseOrder;
 }
 
 // --- 可复用子组件 ---
@@ -151,14 +142,38 @@ const strategies = [
 // --- 主组件 ---
 
 export default function DeliverySettings() {
+  const location = useLocation();
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
   const [intelligentSubStrategy, setIntelligentSubStrategy] = useState<'time-based' | 'amount-based' | null>(null);
+  const timeBasedRef = useRef<HTMLDivElement>(null);
+  const escalationRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth <= 768);
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
+
+  // 从 Dashboard 跳转过来时，自动展开对应模块并滚动定位
+  useEffect(() => {
+    const state = location.state as { section?: string } | null;
+    if (!state?.section) return;
+
+    if (state.section === 'time-based') {
+      updateSettings({ dispatchStrategy: 'balanced' });
+      setIntelligentSubStrategy('time-based');
+      setTimeout(() => timeBasedRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 100);
+    } else if (state.section === 'amount-based') {
+      updateSettings({ dispatchStrategy: 'balanced' });
+      setIntelligentSubStrategy('amount-based');
+      setTimeout(() => timeBasedRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 100);
+    } else if (state.section === 'escalation') {
+      setTimeout(() => escalationRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 100);
+    }
+
+    // 清除 state 避免刷新时重复触发
+    window.history.replaceState({}, '');
+  }, [location.state]);
 
   const [settings, setSettings] = useState<DeliverySettings>({
     dispatchStrategy: 'balanced',
@@ -206,12 +221,6 @@ export default function DeliverySettings() {
       tipAmount: 3,
       maxTipAmount: 15,
       tipIncrementRounds: 3,
-    },
-    pauseOrder: {
-      paused: false,
-      autoResumeEnabled: true,
-      autoResumeMinutes: 30,
-      pauseReason: '',
     },
   });
 
@@ -301,59 +310,7 @@ export default function DeliverySettings() {
 
       <Space direction="vertical" size={16} style={{ width: '100%' }}>
 
-        {/* ===== 暂停接单 ===== */}
-        <Card size="small" style={{
-          ...cardStyle,
-          background: settings.pauseOrder.paused ? 'linear-gradient(135deg, #fff1f0 0%, #fff0e6 100%)' : '#fff',
-          border: settings.pauseOrder.paused ? '1px solid #ffccc7' : 'none',
-        }} styles={{ body: { padding: pad } }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              {settings.pauseOrder.paused
-                ? <PauseCircleOutlined style={{ fontSize: 20, color: '#ff4d4f' }} />
-                : <PlayCircleOutlined style={{ fontSize: 20, color: '#52c41a' }} />
-              }
-              <div>
-                <div style={{ fontSize: 15, fontWeight: 600, color: settings.pauseOrder.paused ? '#cf1322' : '#1a1a1a' }}>
-                  {settings.pauseOrder.paused ? '已暂停接单' : '接单中'}
-                </div>
-                <div style={{ fontSize: 12, color: '#999', marginTop: 2 }}>
-                  {settings.pauseOrder.paused ? '当前不会接收新的配送订单' : '正常接收配送订单'}
-                </div>
-              </div>
-            </div>
-            <Button
-              type={settings.pauseOrder.paused ? 'primary' : 'default'}
-              danger={!settings.pauseOrder.paused}
-              onClick={() => updateSettings({ pauseOrder: { ...settings.pauseOrder, paused: !settings.pauseOrder.paused } })}
-              style={{ borderRadius: 8 }}
-            >
-              {settings.pauseOrder.paused ? '恢复接单' : '暂停接单'}
-            </Button>
-          </div>
-
-          {settings.pauseOrder.paused && (
-            <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid #ffe0d6' }}>
-              <SettingRow title="自动恢复" desc="暂停一段时间后自动恢复接单">
-                <Switch checked={settings.pauseOrder.autoResumeEnabled}
-                  onChange={v => updateSettings({ pauseOrder: { ...settings.pauseOrder, autoResumeEnabled: v } })} />
-              </SettingRow>
-              {settings.pauseOrder.autoResumeEnabled && (
-                <SettingRow title="恢复时间" desc="暂停后多久自动恢复" noBorder>
-                  <Select value={settings.pauseOrder.autoResumeMinutes}
-                    onChange={v => updateSettings({ pauseOrder: { ...settings.pauseOrder, autoResumeMinutes: v } })}
-                    size="small" style={{ width: 100 }}>
-                    <Select.Option value={15}>15 分钟</Select.Option>
-                    <Select.Option value={30}>30 分钟</Select.Option>
-                    <Select.Option value={60}>1 小时</Select.Option>
-                    <Select.Option value={120}>2 小时</Select.Option>
-                  </Select>
-                </SettingRow>
-              )}
-            </div>
-          )}
-        </Card>
-
+        {/* ===== 派单策略选择 ===== */}
         {/* ===== 派单策略选择 ===== */}
         <Card size="small" style={cardStyle} styles={{ body: { padding: pad } }}>
           <SectionTitle icon={<ThunderboltOutlined />} title="派单策略" />
@@ -467,6 +424,7 @@ export default function DeliverySettings() {
 
         {/* ===== 分时段配送策略 ===== */}
         {settings.dispatchStrategy === 'balanced' && intelligentSubStrategy === 'time-based' && (
+          <div ref={timeBasedRef}>
           <Card size="small" style={cardStyle} styles={{ body: { padding: pad } }}>
             <SectionTitle icon={<FieldTimeOutlined />} title="分时段配送策略" />
             {settings.timeBasedStrategies.map((s, i) => (
@@ -504,6 +462,7 @@ export default function DeliverySettings() {
               💡 系统会根据当前时间自动匹配对应时段的配送策略
             </div>
           </Card>
+          </div>
         )}
 
         {/* ===== 订单金额分级 ===== */}
@@ -554,6 +513,7 @@ export default function DeliverySettings() {
           </Card>
         )}
         {/* ===== 无人接单自动升级 ===== */}
+        <div ref={escalationRef}>
         <Card size="small" style={cardStyle} styles={{ body: { padding: pad } }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
             <SectionTitle icon={<SwapOutlined />} title="无人接单自动升级" tag="智能" />
@@ -666,6 +626,7 @@ export default function DeliverySettings() {
             </>
           )}
         </Card>
+        </div>
 
         {/* ===== 其他设置 ===== */}
         <Card size="small" style={cardStyle} styles={{ body: { padding: pad } }}>

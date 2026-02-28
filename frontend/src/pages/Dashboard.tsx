@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Card, Row, Col, Statistic, Tag, Button } from 'antd';
+import { Card, Row, Col, Statistic, Tag, Button, Modal } from 'antd';
 import {
   ShoppingOutlined, CheckCircleOutlined, ClockCircleOutlined,
   DollarOutlined, RightOutlined, ThunderboltOutlined,
   FieldTimeOutlined, SwapOutlined, ArrowUpOutlined, ArrowDownOutlined,
-  WarningFilled
+  WarningFilled, EyeOutlined
 } from '@ant-design/icons';
 import { RadarChart, PolarGrid, PolarAngleAxis, Radar, ResponsiveContainer } from 'recharts';
 import client from '../api/client';
@@ -18,110 +18,157 @@ const platforms = [
 
 type PlatformKey = typeof platforms[number]['key'];
 
-// ─── 各平台数据（2月 vs 1月 mock）───
+// ─── 指标方向定义（用于动态判断好坏）───
+const metricDirection: Record<string, 'higher-better' | 'lower-better'> = {
+  '准时达率': 'higher-better',
+  '首次呼叫成功率': 'higher-better',
+  '平均配送时长': 'lower-better',
+  '整体超时率': 'lower-better',
+  '单均配送费': 'lower-better',
+  '配送费占比': 'lower-better',
+  '小费支出占比': 'lower-better',
+  '平均接单耗时': 'lower-better',
+  '升级触发率': 'lower-better',
+};
+
+// 动态计算指标状态
+const getMetricStatus = (label: string, current: string, prev: string): 'good' | 'warn' | 'bad' => {
+  const direction = metricDirection[label];
+  if (!direction || !prev) return 'good';
+
+  const currNum = parseFloat(current.replace(/[^0-9.]/g, ''));
+  const prevNum = parseFloat(prev.replace(/[^0-9.]/g, ''));
+  const diff = currNum - prevNum;
+
+  if (Math.abs(diff) < 0.01) return 'good'; // 基本无变化
+
+  if (direction === 'higher-better') {
+    // 越高越好的指标（准时达率、成功率等）
+    if (diff > 0) return 'good'; // 上升是好事
+    if (diff < -2) return 'bad';  // 下降超过2就是坏事
+    return 'warn';
+  } else {
+    // 越低越好的指标（配送时长、超时率、成本等）
+    if (diff < 0) return 'good'; // 下降是好事
+    if (diff > 2) return 'bad';   // 上升超过2就是坏事
+    return 'warn';
+  }
+};
+
+// ─── 各平台数据（6月 vs 5月 mock — 正常经营月份对比）───
 const platformData: Record<PlatformKey, {
   merchantScore: number;
   lastMonthScore: number;
   dimensions: { dimension: string; score: number; lastMonth: number; fullMark: number }[];
   dimensionDetails: Record<string, {
     color: string; icon: React.ReactNode;
-    metrics: { label: string; value: string; prev?: string; status: 'good' | 'warn' | 'bad' }[];
+    metrics: { label: string; value: string; prev?: string }[];
   }>;
-  suggestions: { level: 'good' | 'warn' | 'bad'; title: string; desc: string; action: string; settingPath: string }[];
+  timeoutDetails?: { period: string; rate: string; prev: string; time: string }[]; // 时段超时率详情
+  suggestions: { level: 'good' | 'warn' | 'bad'; title: string; desc: string; action: string; settingPath: string; navSection?: string }[];
 }> = {
   meituan: {
-    merchantScore: 4.6,
-    lastMonthScore: 4.8,
+    merchantScore: 4.5,
+    lastMonthScore: 4.6,
     dimensions: [
-      { dimension: '配送时效', score: 74, lastMonth: 69, fullMark: 100 },
-      { dimension: '配送成本', score: 65, lastMonth: 72, fullMark: 100 },
-      { dimension: '骑手响应', score: 58, lastMonth: 63, fullMark: 100 },
+      { dimension: '配送时效', score: 72, lastMonth: 75, fullMark: 100 },
+      { dimension: '配送成本', score: 68, lastMonth: 71, fullMark: 100 },
+      { dimension: '骑手响应', score: 65, lastMonth: 68, fullMark: 100 },
     ],
     dimensionDetails: {
       '配送时效': {
         color: '#1890ff', icon: <FieldTimeOutlined />,
         metrics: [
-          { label: '准时达率', value: '91.2%', prev: '87.6%', status: 'good' },
-          { label: '平均配送时长', value: '29分钟', prev: '33分钟', status: 'good' },
-          { label: '午高峰超时率', value: '12.8%', prev: '18.5%', status: 'warn' },
+          { label: '准时达率', value: '88.5%', prev: '91.2%' },
+          { label: '平均配送时长', value: '32分钟', prev: '29分钟' },
+          { label: '整体超时率', value: '15.3%', prev: '12.1%' },
         ],
       },
       '配送成本': {
         color: '#52c41a', icon: <DollarOutlined />,
         metrics: [
-          { label: '单均配送费', value: '¥6.9', prev: '¥5.4', status: 'bad' },
-          { label: '配送费占比', value: '22.1%', prev: '17.8%', status: 'bad' },
-          { label: '小费支出占比', value: '11.3%', prev: '6.2%', status: 'bad' },
+          { label: '单均配送费', value: '¥6.2', prev: '¥5.8' },
+          { label: '配送费占比', value: '20.5%', prev: '19.1%' },
+          { label: '小费支出占比', value: '8.7%', prev: '7.2%' },
         ],
       },
       '骑手响应': {
         color: '#fa8c16', icon: <SwapOutlined />,
         metrics: [
-          { label: '平均接单耗时', value: '67秒', prev: '42秒', status: 'bad' },
-          { label: '首次呼叫成功率', value: '61%', prev: '78%', status: 'bad' },
-          { label: '升级触发率', value: '39%', prev: '22%', status: 'bad' },
+          { label: '平均接单耗时', value: '58秒', prev: '51秒' },
+          { label: '首次呼叫成功率', value: '68%', prev: '73%' },
+          { label: '升级触发率', value: '32%', prev: '27%' },
         ],
       },
     },
+    timeoutDetails: [
+      { period: '早高峰', rate: '18.5%', prev: '15.2%', time: '07:00-09:00' },
+      { period: '午高峰', rate: '22.3%', prev: '18.8%', time: '11:00-13:00' },
+      { period: '晚高峰', rate: '15.8%', prev: '13.5%', time: '17:00-19:00' },
+      { period: '平峰时段', rate: '8.2%', prev: '7.1%', time: '其他时段' },
+    ],
     suggestions: [
-      { level: 'bad', title: '骑手响应大幅下滑，首次呼叫成功率仅61%',
-        desc: '春节后运力未完全恢复，建议缩短单平台等待时间至45秒加快轮询',
-        action: '去调整等待时间', settingPath: '/mine/delivery-settings' },
-      { level: 'bad', title: '配送成本环比上涨28%，小费支出翻倍',
-        desc: '升级触发率从22%升至39%，建议将每轮加价从¥3降至¥2',
-        action: '去调整小费配置', settingPath: '/mine/delivery-settings' },
-      { level: 'warn', title: '午高峰超时率12.8%，已较1月改善',
-        desc: '建议午高峰保持速度优先，平峰切回低价优先节省成本',
-        action: '去设置分时段策略', settingPath: '/mine/delivery-settings' },
-      { level: 'good', title: '准时达率提升至91.2%，配送时长缩短4分钟',
-        desc: '配送时效表现良好，建议维持现有时效相关设置',
-        action: '查看配送设置', settingPath: '/mine/delivery-settings' },
+      { level: 'bad', title: '配送时效持续下滑，准时达率降至88.5%',
+        desc: '午高峰超时率上升3.2%，建议优化高峰时段派单策略，优先选择速度快的平台',
+        action: '去优化派单策略', settingPath: '/mine/delivery-settings', navSection: 'time-based' },
+      { level: 'bad', title: '配送成本环比上涨7%，小费支出增加',
+        desc: '升级触发率上升至32%，建议适当延长单平台等待时间，减少不必要的升级',
+        action: '去调整等待时间', settingPath: '/mine/delivery-settings', navSection: 'escalation' },
+      { level: 'warn', title: '骑手响应速度变慢，接单耗时增加7秒',
+        desc: '首次呼叫成功率下降5%，可能是运力紧张，建议启用更多运力平台分散风险',
+        action: '去启用更多平台', settingPath: '/mine/delivery-settings', navSection: 'time-based' },
     ],
   },
   eleme: {
-    merchantScore: 4.5,
-    lastMonthScore: 4.3,
+    merchantScore: 4.7,
+    lastMonthScore: 4.6,
     dimensions: [
-      { dimension: '配送时效', score: 78, lastMonth: 72, fullMark: 100 },
-      { dimension: '配送成本', score: 70, lastMonth: 68, fullMark: 100 },
-      { dimension: '骑手响应', score: 62, lastMonth: 55, fullMark: 100 },
+      { dimension: '配送时效', score: 78, lastMonth: 75, fullMark: 100 },
+      { dimension: '配送成本', score: 73, lastMonth: 70, fullMark: 100 },
+      { dimension: '骑手响应', score: 71, lastMonth: 68, fullMark: 100 },
     ],
     dimensionDetails: {
       '配送时效': {
         color: '#1890ff', icon: <FieldTimeOutlined />,
         metrics: [
-          { label: '准时达率', value: '93.1%', prev: '89.2%', status: 'good' },
-          { label: '平均配送时长', value: '27分钟', prev: '31分钟', status: 'good' },
-          { label: '午高峰超时率', value: '9.6%', prev: '14.2%', status: 'good' },
+          { label: '准时达率', value: '92.8%', prev: '91.5%' },
+          { label: '平均配送时长', value: '28分钟', prev: '30分钟' },
+          { label: '整体超时率', value: '10.2%', prev: '11.8%' },
         ],
       },
       '配送成本': {
         color: '#52c41a', icon: <DollarOutlined />,
         metrics: [
-          { label: '单均配送费', value: '¥5.8', prev: '¥5.5', status: 'warn' },
-          { label: '配送费占比', value: '19.3%', prev: '18.6%', status: 'warn' },
-          { label: '小费支出占比', value: '7.1%', prev: '5.8%', status: 'warn' },
+          { label: '单均配送费', value: '¥5.9', prev: '¥5.6' },
+          { label: '配送费占比', value: '19.6%', prev: '18.9%' },
+          { label: '小费支出占比', value: '7.8%', prev: '7.1%' },
         ],
       },
       '骑手响应': {
         color: '#fa8c16', icon: <SwapOutlined />,
         metrics: [
-          { label: '平均接单耗时', value: '52秒', prev: '68秒', status: 'good' },
-          { label: '首次呼叫成功率', value: '72%', prev: '58%', status: 'good' },
-          { label: '升级触发率', value: '28%', prev: '42%', status: 'good' },
+          { label: '平均接单耗时', value: '48秒', prev: '52秒' },
+          { label: '首次呼叫成功率', value: '76%', prev: '72%' },
+          { label: '升级触发率', value: '24%', prev: '28%' },
         ],
       },
     },
+    timeoutDetails: [
+      { period: '早高峰', rate: '12.5%', prev: '14.2%', time: '07:00-09:00' },
+      { period: '午高峰', rate: '14.8%', prev: '16.5%', time: '11:00-13:00' },
+      { period: '晚高峰', rate: '10.3%', prev: '12.1%', time: '17:00-19:00' },
+      { period: '平峰时段', rate: '6.1%', prev: '7.8%', time: '其他时段' },
+    ],
     suggestions: [
-      { level: 'good', title: '骑手响应显著回升，接单耗时缩短16秒',
-        desc: '饿了么运力恢复较快，首次呼叫成功率提升14个百分点',
-        action: '查看配送设置', settingPath: '/mine/delivery-settings' },
-      { level: 'good', title: '准时达率提升至93.1%，超时率大幅下降',
-        desc: '配送时效全面改善，建议维持当前策略',
-        action: '查看配送设置', settingPath: '/mine/delivery-settings' },
-      { level: 'warn', title: '配送成本小幅上涨，小费占比升至7.1%',
-        desc: '成本增幅可控，建议关注小费支出趋势',
-        action: '去查看成本', settingPath: '/mine/delivery-settings' },
+      { level: 'good', title: '配送时效稳步提升，准时达率达92.8%',
+        desc: '饿了么整体表现优秀，配送时长缩短2分钟，建议维持当前策略',
+        action: '查看配送设置', settingPath: '/mine/delivery-settings', navSection: 'time-based' },
+      { level: 'good', title: '骑手响应持续优化，接单耗时缩短4秒',
+        desc: '首次呼叫成功率提升至76%，升级触发率下降，运力稳定',
+        action: '查看配送设置', settingPath: '/mine/delivery-settings', navSection: 'escalation' },
+      { level: 'warn', title: '配送成本小幅上涨，小费占比增加0.7%',
+        desc: '成本增幅可控，建议关注小费支出趋势，避免进一步上升',
+        action: '去查看成本', settingPath: '/mine/delivery-settings', navSection: 'escalation' },
     ],
   },
 };
@@ -136,6 +183,7 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
   const [activePlatform, setActivePlatform] = useState<PlatformKey>('meituan');
+  const [timeoutModalVisible, setTimeoutModalVisible] = useState(false);
   const [stats, setStats] = useState({
     todayOrders: 0, completedOrders: 0, pendingOrders: 0, todayRevenue: 0,
   });
@@ -215,7 +263,7 @@ export default function Dashboard() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <ThunderboltOutlined style={{ fontSize: 16, color: '#4A90E2' }} />
             <span style={{ fontSize: 15, fontWeight: 600 }}>配送经营雷达</span>
-            <Tag color="blue" style={{ fontSize: 11, lineHeight: '18px', borderRadius: 10 }}>2月</Tag>
+            <Tag color="blue" style={{ fontSize: 11, lineHeight: '18px', borderRadius: 10 }}>6月</Tag>
           </div>
           <div style={{ display: 'flex', gap: 6 }}>
             {platforms.map(p => (
@@ -256,7 +304,7 @@ export default function Dashboard() {
               </div>
             </div>
             <div style={{ fontSize: 12, color: '#999', textAlign: 'right' }}>
-              <div>1月: {current.lastMonthScore}</div>
+              <div>5月: {current.lastMonthScore}</div>
               <div style={{ marginTop: 2, color: scoreDiff >= 0 ? '#52c41a' : '#ff4d4f' }}>
                 {scoreDiff >= 0 ? '评分上升' : '评分下降'}
               </div>
@@ -266,8 +314,8 @@ export default function Dashboard() {
 
         {/* 图例 */}
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, fontSize: 12, color: '#999', marginBottom: 4 }}>
-          <span><span style={{ display: 'inline-block', width: 16, height: 2, background: '#d9d9d9', verticalAlign: 'middle', marginRight: 4, borderTop: '1px dashed #d9d9d9' }} />1月</span>
-          <span><span style={{ display: 'inline-block', width: 16, height: 2, background: pCfg.color, verticalAlign: 'middle', marginRight: 4 }} />2月</span>
+          <span><span style={{ display: 'inline-block', width: 16, height: 2, background: '#d9d9d9', verticalAlign: 'middle', marginRight: 4, borderTop: '1px dashed #d9d9d9' }} />5月</span>
+          <span><span style={{ display: 'inline-block', width: 16, height: 2, background: pCfg.color, verticalAlign: 'middle', marginRight: 4 }} />6月</span>
         </div>
 
         {/* 雷达图 — 精简顶点标签，避免重叠 */}
@@ -343,19 +391,142 @@ export default function Dashboard() {
                   )}
                 </div>
                 {detail.metrics.map(m => {
-                  const cfg = levelConfig[m.status];
+                  const status = getMetricStatus(m.label, m.value, m.prev || '');
+                  const cfg = levelConfig[status];
+                  const isBad = status === 'bad';
+
+                  // 计算增幅
+                  let changeText = '';
+                  let changePercent = 0;
+                  if (m.prev) {
+                    const currNum = parseFloat(m.value.replace(/[^0-9.]/g, ''));
+                    const prevNum = parseFloat(m.prev.replace(/[^0-9.]/g, ''));
+                    const diff = currNum - prevNum;
+                    changePercent = prevNum !== 0 ? (diff / prevNum) * 100 : 0;
+                    const isPercent = m.value.includes('%');
+                    const unit = isPercent ? '%' : m.value.includes('分钟') ? '分钟' : m.value.includes('秒') ? '秒' : '';
+                    changeText = `${diff >= 0 ? '+' : ''}${diff.toFixed(isPercent ? 1 : 0)}${unit}`;
+                  }
+
+                  const isTimeoutMetric = m.label === '整体超时率';
+
                   return (
                     <div key={m.label} style={{
                       display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                      padding: '6px 0', borderBottom: '1px solid #f0f0f0',
-                    }}>
-                      <span style={{ fontSize: 13, color: '#666' }}>{m.label}</span>
+                      padding: '12px 14px',
+                      background: isBad
+                        ? 'linear-gradient(135deg, #fff1f0 0%, #ffe7e6 100%)'
+                        : 'linear-gradient(135deg, #ffffff 0%, #fafafa 100%)',
+                      borderRadius: 10,
+                      marginBottom: 8,
+                      border: isBad ? '2px solid #ff4d4f' : '1px solid #e8e8e8',
+                      boxShadow: isBad ? '0 2px 8px rgba(255, 77, 79, 0.15)' : '0 1px 4px rgba(0,0,0,0.04)',
+                      transition: 'all 0.2s',
+                      cursor: isTimeoutMetric ? 'pointer' : 'default',
+                    }}
+                    onClick={() => isTimeoutMetric && setTimeoutModalVisible(true)}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <span style={{ fontSize: 14, fontWeight: 600, color: '#262626' }}>{m.value}</span>
+                        {isBad && (
+                          <div style={{
+                            width: 4, height: 24, background: '#ff4d4f',
+                            borderRadius: 2, marginRight: 4,
+                            boxShadow: '0 0 8px rgba(255, 77, 79, 0.4)'
+                          }} />
+                        )}
+                        <span style={{
+                          fontSize: 14,
+                          color: '#1a1a1a',
+                          fontWeight: 600,
+                          letterSpacing: '0.3px'
+                        }}>
+                          {m.label}
+                        </span>
+                        {isTimeoutMetric && (
+                          <EyeOutlined style={{ fontSize: 14, color: '#1890ff', marginLeft: 4 }} />
+                        )}
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                         {m.prev && (
-                          <span style={{ fontSize: 12, color: cfg.color }}>
-                            {m.status === 'good' ? '↑' : m.status === 'bad' ? '↓' : '→'} {m.prev}
-                          </span>
+                          <>
+                            <span style={{
+                              fontSize: 15,
+                              color: '#595959',
+                              fontFamily: 'monospace',
+                              fontWeight: 600,
+                              padding: '4px 10px',
+                              background: '#f5f5f5',
+                              borderRadius: 6,
+                              border: '1px solid #e8e8e8',
+                              width: '80px',
+                              textAlign: 'center',
+                              display: 'inline-block'
+                            }}>
+                              {m.prev}
+                            </span>
+                            <svg width="16" height="16" viewBox="0 0 16 16" style={{ flexShrink: 0 }}>
+                              <path d="M3 8 L13 8 M10 5 L13 8 L10 11" stroke="#bfbfbf" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
+                            </svg>
+                          </>
+                        )}
+                        <span style={{
+                          fontSize: 15,
+                          fontWeight: 700,
+                          color: isBad ? '#ff4d4f' : '#1a1a1a',
+                          fontFamily: 'monospace',
+                          letterSpacing: '0.5px',
+                          width: '80px',
+                          textAlign: 'center',
+                          display: 'inline-block',
+                          padding: '4px 10px',
+                          background: isBad ? 'rgba(255, 77, 79, 0.08)' : 'rgba(0, 0, 0, 0.02)',
+                          borderRadius: 6,
+                          border: isBad ? '1px solid rgba(255, 77, 79, 0.2)' : '1px solid rgba(0, 0, 0, 0.06)'
+                        }}>
+                          {m.value}
+                        </span>
+                        {changeText && (
+                          <div style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: 3,
+                            padding: '4px 10px',
+                            borderRadius: 14,
+                            minWidth: '100px',
+                            background: status === 'good'
+                              ? 'linear-gradient(135deg, #52c41a 0%, #73d13d 100%)'
+                              : status === 'bad'
+                              ? 'linear-gradient(135deg, #ff4d4f 0%, #ff7875 100%)'
+                              : 'linear-gradient(135deg, #faad14 0%, #ffc53d 100%)',
+                            boxShadow: status === 'good'
+                              ? '0 2px 10px rgba(82, 196, 26, 0.35)'
+                              : status === 'bad'
+                              ? '0 2px 10px rgba(255, 77, 79, 0.35)'
+                              : '0 2px 10px rgba(250, 173, 20, 0.35)',
+                            border: '1px solid rgba(255, 255, 255, 0.3)'
+                          }}>
+                            <span style={{
+                              fontSize: 12,
+                              fontWeight: 700,
+                              color: '#fff',
+                              fontFamily: 'monospace',
+                              textShadow: '0 1px 3px rgba(0,0,0,0.2)'
+                            }}>
+                              {changeText}
+                            </span>
+                            {Math.abs(changePercent) > 1 && (
+                              <span style={{
+                                fontSize: 10,
+                                color: '#fff',
+                                opacity: 0.95,
+                                fontFamily: 'monospace',
+                                fontWeight: 600,
+                                textShadow: '0 1px 2px rgba(0,0,0,0.15)'
+                              }}>
+                                ({changePercent > 0 ? '+' : ''}{changePercent.toFixed(0)}%)
+                              </span>
+                            )}
+                          </div>
                         )}
                       </div>
                     </div>
@@ -398,7 +569,7 @@ export default function Dashboard() {
                 <div style={{ fontSize: 12, color: '#666' }}>{s.desc}</div>
               </div>
               <Button type="link" size="small"
-                onClick={() => navigate(s.settingPath)}
+                onClick={() => navigate(s.settingPath, { state: { section: s.navSection } })}
                 style={{ padding: 0, fontSize: 12, whiteSpace: 'nowrap' }}>
                 {s.action} <RightOutlined />
               </Button>
@@ -406,6 +577,93 @@ export default function Dashboard() {
           );
         })}
       </Card>
+
+      {/* 时段超时率详情弹窗 */}
+      <Modal
+        title={
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <FieldTimeOutlined style={{ color: '#1890ff' }} />
+            <span>分时段超时率详情</span>
+            <Tag color="blue" style={{ fontSize: 11 }}>6月</Tag>
+          </div>
+        }
+        open={timeoutModalVisible}
+        onCancel={() => setTimeoutModalVisible(false)}
+        footer={null}
+        width={600}
+      >
+        <div style={{ marginTop: 16 }}>
+          {current.timeoutDetails?.map((item, idx) => {
+            const currRate = parseFloat(item.rate);
+            const prevRate = parseFloat(item.prev);
+            const diff = currRate - prevRate;
+            const isBad = diff > 1;
+
+            return (
+              <div key={idx} style={{
+                padding: '14px 16px',
+                background: isBad ? 'linear-gradient(135deg, #fff1f0 0%, #ffe7e6 100%)' : '#fafafa',
+                borderRadius: 10,
+                marginBottom: 10,
+                border: isBad ? '2px solid #ff4d4f' : '1px solid #e8e8e8',
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                  <div>
+                    <span style={{ fontSize: 15, fontWeight: 600, color: '#1a1a1a' }}>{item.period}</span>
+                    <span style={{ fontSize: 12, color: '#999', marginLeft: 8 }}>{item.time}</span>
+                  </div>
+                  <Button
+                    type="link"
+                    size="small"
+                    onClick={() => {
+                      setTimeoutModalVisible(false);
+                      navigate('/mine/delivery-settings', { state: { section: 'time-based' } });
+                    }}
+                    style={{ padding: 0 }}
+                  >
+                    去优化策略 <RightOutlined />
+                  </Button>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 14, color: '#8c8c8c', fontFamily: 'monospace' }}>
+                    {item.prev}
+                  </span>
+                  <span style={{ fontSize: 14, color: '#bfbfbf' }}>→</span>
+                  <span style={{
+                    fontSize: 16,
+                    fontWeight: 700,
+                    color: isBad ? '#ff4d4f' : '#1a1a1a',
+                    fontFamily: 'monospace'
+                  }}>
+                    {item.rate}
+                  </span>
+                  <div style={{
+                    padding: '2px 8px',
+                    borderRadius: 10,
+                    background: diff > 0 ? '#ff4d4f' : '#52c41a',
+                    color: '#fff',
+                    fontSize: 11,
+                    fontWeight: 600,
+                  }}>
+                    {diff > 0 ? '+' : ''}{diff.toFixed(1)}%
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+          <div style={{
+            marginTop: 16,
+            padding: '12px',
+            background: '#e6f7ff',
+            borderRadius: 8,
+            border: '1px solid #91d5ff',
+          }}>
+            <div style={{ fontSize: 12, color: '#0050b3', lineHeight: '20px' }}>
+              💡 提示：点击"去优化策略"可跳转到配送设置中的分时段策略，针对性调整高峰时段的派单策略（速度优先/低价优先）
+            </div>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

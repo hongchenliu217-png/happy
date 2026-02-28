@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Tabs, Button, Card, Tag, Space, message, Modal, Badge, Radio, Row, Col, Statistic, Empty } from 'antd';
+import { Tabs, Button, Card, Tag, Space, message, Modal, Badge, Radio, Row, Col, Statistic, Empty, Select, Switch } from 'antd';
 import {
   CheckOutlined,
   PlusOutlined,
@@ -9,7 +9,9 @@ import {
   ShoppingOutlined,
   DollarOutlined,
   TruckOutlined,
-  WarningOutlined
+  WarningOutlined,
+  PauseCircleOutlined,
+  PlayCircleOutlined
 } from '@ant-design/icons';
 import { ordersApi, Order } from '../api/orders';
 import client from '../api/client';
@@ -44,6 +46,10 @@ export default function Orders() {
   const [selectedPlatform, setSelectedPlatform] = useState<string>('');
   const [platformPrices, setPlatformPrices] = useState<any[]>([]);
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
+  const [paused, setPaused] = useState(false);
+  const [autoResumeEnabled, setAutoResumeEnabled] = useState(true);
+  const [autoResumeMinutes, setAutoResumeMinutes] = useState(30);
+  const [pauseTimer, setPauseTimer] = useState<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     loadOrders();
@@ -57,6 +63,28 @@ export default function Orders() {
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
+
+  useEffect(() => {
+    return () => { if (pauseTimer) clearTimeout(pauseTimer); };
+  }, [pauseTimer]);
+
+  const togglePause = () => {
+    if (!paused) {
+      setPaused(true);
+      message.warning('已暂停接单');
+      if (autoResumeEnabled) {
+        const timer = setTimeout(() => {
+          setPaused(false);
+          message.success('已自动恢复接单');
+        }, autoResumeMinutes * 60 * 1000);
+        setPauseTimer(timer);
+      }
+    } else {
+      setPaused(false);
+      if (pauseTimer) { clearTimeout(pauseTimer); setPauseTimer(null); }
+      message.success('已恢复接单');
+    }
+  };
 
   const loadOrders = async () => {
     try {
@@ -553,30 +581,72 @@ export default function Orders() {
         />
       </div>
 
+      {/* 暂停接单状态栏 */}
+      {paused && (
+        <div style={{
+          margin: '0 12px', padding: '10px 14px', borderRadius: 10,
+          background: 'linear-gradient(135deg, #fff1f0 0%, #fff0e6 100%)',
+          border: '1px solid #ffccc7',
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <PauseCircleOutlined style={{ fontSize: 18, color: '#ff4d4f' }} />
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: '#cf1322' }}>已暂停接单</div>
+              <div style={{ fontSize: 11, color: '#999' }}>
+                {autoResumeEnabled ? `${autoResumeMinutes}分钟后自动恢复` : '需手动恢复'}
+              </div>
+            </div>
+          </div>
+          <Button type="primary" size="small" onClick={togglePause} style={{ borderRadius: 8 }}>
+            恢复接单
+          </Button>
+        </div>
+      )}
+
       {/* 订单列表 */}
       <div style={{ padding: isMobile ? '12px' : '16px' }}>
         {/* 快捷操作按钮 */}
-        <div style={{ marginBottom: isMobile ? 12 : 16 }}>
-          <Button
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={simulateOrder}
-            loading={loading}
-            block
-            size={isMobile ? 'middle' : 'large'}
-            style={{
-              height: isMobile ? 44 : 52,
-              fontSize: isMobile ? 14 : 16,
-              fontWeight: 'bold',
-              borderRadius: isMobile ? 8 : 12,
-              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-              border: 'none',
-              boxShadow: '0 4px 12px rgba(102, 126, 234, 0.4)'
-            }}
-          >
-            模拟上游订单自动进入
-          </Button>
-        </div>
+        <Row gutter={10} style={{ marginBottom: isMobile ? 12 : 16 }}>
+          <Col flex="auto">
+            <Button
+              type="primary"
+              icon={<PlusOutlined />}
+              onClick={simulateOrder}
+              loading={loading}
+              block
+              size={isMobile ? 'middle' : 'large'}
+              style={{
+                height: isMobile ? 44 : 52,
+                fontSize: isMobile ? 14 : 16,
+                fontWeight: 'bold',
+                borderRadius: isMobile ? 8 : 12,
+                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                border: 'none',
+                boxShadow: '0 4px 12px rgba(102, 126, 234, 0.4)'
+              }}
+            >
+              模拟上游订单自动进入
+            </Button>
+          </Col>
+          <Col>
+            <Button
+              danger={!paused}
+              type={paused ? 'primary' : 'default'}
+              icon={paused ? <PlayCircleOutlined /> : <PauseCircleOutlined />}
+              onClick={togglePause}
+              size={isMobile ? 'middle' : 'large'}
+              style={{
+                height: isMobile ? 44 : 52,
+                borderRadius: isMobile ? 8 : 12,
+                fontWeight: 'bold',
+                fontSize: isMobile ? 13 : 14,
+              }}
+            >
+              {paused ? '恢复' : '暂停'}
+            </Button>
+          </Col>
+        </Row>
 
         {/* 订单列表或空状态 */}
         {filteredOrders.length === 0 ? (
