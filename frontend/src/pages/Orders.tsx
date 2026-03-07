@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Tabs, Button, Card, Tag, Space, message, Modal, Badge, Radio, Row, Col, Statistic, Empty, Select, Switch } from 'antd';
+import { useNavigate } from 'react-router-dom';
 import {
   CheckOutlined,
   PlusOutlined,
@@ -11,7 +12,8 @@ import {
   TruckOutlined,
   WarningOutlined,
   PauseCircleOutlined,
-  PlayCircleOutlined
+  PlayCircleOutlined,
+  TeamOutlined
 } from '@ant-design/icons';
 import { ordersApi, Order } from '../api/orders';
 import client from '../api/client';
@@ -37,6 +39,7 @@ const sourceMap: Record<string, { text: string; color: string }> = {
 };
 
 export default function Orders() {
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('new');
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(false);
@@ -48,13 +51,18 @@ export default function Orders() {
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
   const [paused, setPaused] = useState(false);
   const [autoResumeEnabled, setAutoResumeEnabled] = useState(true);
+  const [stationStatus, setStationStatus] = useState<any>(null); // 驻店状态
   const [autoResumeMinutes, setAutoResumeMinutes] = useState(30);
   const [pauseTimer, setPauseTimer] = useState<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     loadOrders();
     loadPlatforms();
-    const interval = setInterval(loadOrders, 3000);
+    loadStationStatus();
+    const interval = setInterval(() => {
+      loadOrders();
+      loadStationStatus();
+    }, 3000);
     return () => clearInterval(interval);
   }, []);
 
@@ -102,6 +110,22 @@ export default function Orders() {
     } catch (error) {
       console.error('加载平台失败:', error);
     }
+  };
+
+  const loadStationStatus = async () => {
+    // TODO: 从后端加载驻店状态
+    // 这里先用mock数据模拟
+    const mockStation = {
+      active: true,
+      rider: {
+        name: '张三',
+        platform: '闪送'
+      },
+      remainingMinutes: 83,
+      completedOrders: 8
+    };
+    // setStationStatus(mockStation); // 有驻店时
+    setStationStatus(null); // 无驻店时
   };
 
   // 计算统计数据
@@ -487,6 +511,33 @@ export default function Orders() {
 
   return (
     <div style={{ background: '#f5f5f5', minHeight: '100vh', paddingBottom: 20 }}>
+      {/* 驻店状态悬浮条 */}
+      {stationStatus && (
+        <div
+          onClick={() => navigate('/mine/station-management')}
+          style={{
+            background: 'linear-gradient(135deg, #f6ffed 0%, #d9f7be 100%)',
+            padding: '12px 16px',
+            borderBottom: '2px solid #b7eb8f',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between'
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Badge status="processing" />
+            <TeamOutlined style={{ fontSize: 16, color: '#52c41a' }} />
+            <span style={{ fontSize: 14, fontWeight: 600, color: '#52c41a' }}>
+              驻店中：{stationStatus.rider.name}({stationStatus.rider.platform})
+            </span>
+          </div>
+          <div style={{ fontSize: 12, color: '#666' }}>
+            剩余{Math.floor(stationStatus.remainingMinutes / 60)}h{stationStatus.remainingMinutes % 60}m · 已完成{stationStatus.completedOrders}单
+          </div>
+        </div>
+      )}
+
       {/* 数据概览卡片 */}
       <div style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', padding: isMobile ? '16px 12px' : '20px 16px' }}>
         <Row gutter={[12, 12]}>

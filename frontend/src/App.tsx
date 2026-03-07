@@ -13,6 +13,9 @@ import DeliveryBind from './pages/mine/DeliveryBind';
 import OrderSettings from './pages/mine/OrderSettings';
 import DeliverySettings from './pages/mine/DeliverySettings';
 import PlatformPerformance from './pages/mine/PlatformPerformance';
+import StationManagement from './pages/mine/StationManagement';
+import StationCreate from './pages/mine/StationCreate';
+import StationHistory from './pages/mine/StationHistory';
 import Layout from './components/Layout';
 
 function App() {
@@ -38,6 +41,9 @@ function App() {
         <Route path="/mine/order-settings" element={<OrderSettings />} />
         <Route path="/mine/delivery-settings" element={<DeliverySettings />} />
         <Route path="/mine/platform-performance" element={<PlatformPerformance />} />
+        <Route path="/mine/station-management" element={<StationManagement />} />
+        <Route path="/mine/station-create" element={<StationCreate />} />
+        <Route path="/mine/station-history" element={<StationHistory />} />
       </Routes>
     </Layout>
   );
