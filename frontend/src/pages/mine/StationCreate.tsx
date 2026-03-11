@@ -242,18 +242,18 @@ export default function StationCreate() {
                   borderColor: riderCount === recommendedCount ? '#faad14' : undefined
                 }}
               >
-                接受建议（{recommendedCount}人）
+                接受建议 {recommendedCount}
               </Button>
             </div>
           </div>
 
           <div style={{
-            padding: '12px',
+            padding: '16px',
             background: '#fafafa',
             borderRadius: 8,
             marginBottom: 12
           }}>
-            <div style={{ fontSize: 13, color: '#666', marginBottom: 8 }}>
+            <div style={{ fontSize: 13, color: '#666', marginBottom: 12 }}>
               或手动调整人数：
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -261,27 +261,47 @@ export default function StationCreate() {
                 size="large"
                 onClick={() => setRiderCount(Math.max(1, riderCount - 1))}
                 disabled={riderCount <= 1}
-                style={{ width: 48, height: 48, fontSize: 20 }}
+                style={{
+                  width: 48,
+                  height: 48,
+                  fontSize: 20,
+                  flexShrink: 0
+                }}
               >
                 -
               </Button>
               <div style={{
                 flex: 1,
                 textAlign: 'center',
-                fontSize: 24,
+                fontSize: 28,
                 fontWeight: 'bold',
-                color: '#1890ff'
+                color: '#1890ff',
+                minWidth: 80,
+                padding: '8px 0'
               }}>
-                {riderCount} 人
+                {riderCount}
               </div>
               <Button
                 size="large"
                 onClick={() => setRiderCount(Math.min(5, riderCount + 1))}
                 disabled={riderCount >= 5}
-                style={{ width: 48, height: 48, fontSize: 20 }}
+                style={{
+                  width: 48,
+                  height: 48,
+                  fontSize: 20,
+                  flexShrink: 0
+                }}
               >
                 +
               </Button>
+            </div>
+            <div style={{
+              textAlign: 'center',
+              fontSize: 12,
+              color: '#999',
+              marginTop: 8
+            }}>
+              可配置 1-5 人
             </div>
           </div>
 

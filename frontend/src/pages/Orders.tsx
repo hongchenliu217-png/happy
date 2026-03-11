@@ -772,17 +772,30 @@ export default function Orders() {
                 borderRadius: isMobile ? 8 : 12,
                 border: 'none',
                 background: 'rgba(255,255,255,0.95)',
-                boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
+                boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                height: '100%'
               }}
               bodyStyle={{ padding: isMobile ? '12px 8px' : '16px 12px' }}
             >
-              <Statistic
-                title={<span style={{ fontSize: isMobile ? 11 : 12, color: '#666' }}>今日营收</span>}
-                value={stats.totalAmount}
-                prefix={<DollarOutlined style={{ color: '#ff4d4f', fontSize: isMobile ? 16 : 20 }} />}
-                valueStyle={{ fontSize: isMobile ? 20 : 24, fontWeight: 'bold', color: '#ff4d4f' }}
-                precision={2}
-              />
+              <div style={{ fontSize: isMobile ? 11 : 12, color: '#666', marginBottom: 4 }}>今日营收</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                <DollarOutlined style={{ color: '#ff4d4f', fontSize: isMobile ? 16 : 20, flexShrink: 0 }} />
+                <span style={{
+                  fontWeight: 'bold',
+                  color: '#ff4d4f',
+                  fontSize: isMobile ? 20 : 24,
+                  lineHeight: 1.2,
+                  transform: parseFloat(stats.totalAmount) >= 10000
+                    ? 'scale(0.7)'
+                    : parseFloat(stats.totalAmount) >= 1000
+                    ? 'scale(0.85)'
+                    : 'scale(1)',
+                  transformOrigin: 'left center',
+                  display: 'inline-block'
+                }}>
+                  {parseFloat(stats.totalAmount).toFixed(2)}
+                </span>
+              </div>
             </Card>
           </Col>
         </Row>
