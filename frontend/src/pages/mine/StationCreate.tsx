@@ -7,15 +7,18 @@ import dayjs from 'dayjs';
 export default function StationCreate() {
   const navigate = useNavigate();
   const [selectedPlatform, setSelectedPlatform] = useState<string>('shansong');
-  const [timeSlot, setTimeSlot] = useState<string>('lunch');
+  const [timeSlot, setTimeSlot] = useState<string>('');
   const [customStartTime, setCustomStartTime] = useState<any>(dayjs('11:00', 'HH:mm'));
   const [customEndTime, setCustomEndTime] = useState<any>(dayjs('13:00', 'HH:mm'));
-  const [riderCount, setRiderCount] = useState<number>(1);
-  const [recommendedCount, setRecommendedCount] = useState<number>(1);
+  const [riderCount, setRiderCount] = useState<number>(0);
+  const [recommendedCount, setRecommendedCount] = useState<number>(0);
   const [historicalData, setHistoricalData] = useState<any>(null);
+  const [showRecommendation, setShowRecommendation] = useState<boolean>(false);
 
   useEffect(() => {
-    loadHistoricalData();
+    if (timeSlot) {
+      loadHistoricalData();
+    }
   }, [timeSlot]);
 
   const loadHistoricalData = () => {
@@ -46,6 +49,7 @@ export default function StationCreate() {
     setHistoricalData(data);
     setRecommendedCount(data.recommendedRiders);
     setRiderCount(data.recommendedRiders);
+    setShowRecommendation(true);
   };
 
   const timeSlots = [
@@ -196,126 +200,162 @@ export default function StationCreate() {
       </Card>
 
       {/* 选择驻店人数 */}
-      <Card
-        title={<span style={{ fontSize: 16, fontWeight: 'bold' }}>选择驻店人数</span>}
-        style={{ marginBottom: 16, borderRadius: 8 }}
-      >
-        {historicalData && (
+      {showRecommendation && (
+        <Card
+          title={<span style={{ fontSize: 16, fontWeight: 'bold' }}>驻店人数建议</span>}
+          style={{ marginBottom: 16, borderRadius: 8 }}
+        >
           <Alert
             message={
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <BulbOutlined style={{ color: '#faad14' }} />
-                <span style={{ fontSize: 13 }}>
-                  智能推荐：<strong>{recommendedCount}人</strong>
+                <BulbOutlined style={{ color: '#faad14', fontSize: 16 }} />
+                <span style={{ fontSize: 14, fontWeight: 600 }}>
+                  智能推荐：{recommendedCount}人
                 </span>
               </div>
             }
             description={
-              <div style={{ fontSize: 12, color: '#666', marginTop: 4 }}>
-                {historicalData.reason}，建议配置{recommendedCount}名骑手
+              <div style={{ fontSize: 13, color: '#666', marginTop: 8, lineHeight: 1.6 }}>
+                {historicalData?.reason}，建议配置 <strong>{recommendedCount}</strong> 名骑手
               </div>
             }
             type="warning"
             showIcon={false}
-            style={{ marginBottom: 12, borderRadius: 8 }}
+            style={{ marginBottom: 16, borderRadius: 8, border: '2px solid #faad14' }}
           />
-        )}
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <Radio.Group
-            value={riderCount}
-            onChange={(e) => setRiderCount(e.target.value)}
-            style={{ flex: 1 }}
-          >
-            <Radio.Button
-              value={1}
-              style={{
-                width: '33.33%',
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 14, color: '#666', marginBottom: 12 }}>
+              您可以接受建议或自行调整人数：
+            </div>
+            <div style={{ display: 'flex', gap: 12 }}>
+              <Button
+                type="primary"
+                size="large"
+                onClick={() => setRiderCount(recommendedCount)}
+                style={{
+                  flex: 1,
+                  height: 48,
+                  fontSize: 15,
+                  fontWeight: 'bold',
+                  background: riderCount === recommendedCount ? '#faad14' : undefined,
+                  borderColor: riderCount === recommendedCount ? '#faad14' : undefined
+                }}
+              >
+                接受建议（{recommendedCount}人）
+              </Button>
+            </div>
+          </div>
+
+          <div style={{
+            padding: '12px',
+            background: '#fafafa',
+            borderRadius: 8,
+            marginBottom: 12
+          }}>
+            <div style={{ fontSize: 13, color: '#666', marginBottom: 8 }}>
+              或手动调整人数：
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <Button
+                size="large"
+                onClick={() => setRiderCount(Math.max(1, riderCount - 1))}
+                disabled={riderCount <= 1}
+                style={{ width: 48, height: 48, fontSize: 20 }}
+              >
+                -
+              </Button>
+              <div style={{
+                flex: 1,
                 textAlign: 'center',
-                background: recommendedCount === 1 ? '#fffbe6' : undefined,
-                borderColor: recommendedCount === 1 ? '#faad14' : undefined
-              }}
-            >
-              1人{recommendedCount === 1 && ' ⭐'}
-            </Radio.Button>
-            <Radio.Button
-              value={2}
-              style={{
-                width: '33.33%',
-                textAlign: 'center',
-                background: recommendedCount === 2 ? '#fffbe6' : undefined,
-                borderColor: recommendedCount === 2 ? '#faad14' : undefined
-              }}
-            >
-              2人{recommendedCount === 2 && ' ⭐'}
-            </Radio.Button>
-            <Radio.Button
-              value={3}
-              style={{
-                width: '33.33%',
-                textAlign: 'center',
-                background: recommendedCount === 3 ? '#fffbe6' : undefined,
-                borderColor: recommendedCount === 3 ? '#faad14' : undefined
-              }}
-            >
-              3人{recommendedCount === 3 && ' ⭐'}
-            </Radio.Button>
-          </Radio.Group>
-        </div>
-      </Card>
+                fontSize: 24,
+                fontWeight: 'bold',
+                color: '#1890ff'
+              }}>
+                {riderCount} 人
+              </div>
+              <Button
+                size="large"
+                onClick={() => setRiderCount(Math.min(5, riderCount + 1))}
+                disabled={riderCount >= 5}
+                style={{ width: 48, height: 48, fontSize: 20 }}
+              >
+                +
+              </Button>
+            </div>
+          </div>
+
+          {riderCount !== recommendedCount && (
+            <Alert
+              message={
+                riderCount > recommendedCount
+                  ? `增加 ${riderCount - recommendedCount} 人可能导致骑手空闲，增加成本`
+                  : `减少 ${recommendedCount - riderCount} 人可能导致配送压力增大`
+              }
+              type={riderCount > recommendedCount ? 'warning' : 'info'}
+              showIcon
+              style={{ fontSize: 12, borderRadius: 8 }}
+            />
+          )}
+        </Card>
+      )}
 
       {/* 费用预估 */}
-      <Card
-        title={<span style={{ fontSize: 16, fontWeight: 'bold' }}>费用预估</span>}
-        style={{ marginBottom: 16, borderRadius: 8 }}
-      >
-        <div style={{
-          background: 'linear-gradient(135deg, #e6f7ff 0%, #fff 100%)',
-          padding: '16px',
-          borderRadius: 8,
-          border: '1px solid #91d5ff'
-        }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
-            <span style={{ fontSize: 14, color: '#666' }}>驻店时长</span>
-            <span style={{ fontSize: 14, fontWeight: 600 }}>
-              {timeSlot === 'custom'
-                ? `${customEndTime.diff(customStartTime, 'hour', true).toFixed(1)}小时`
-                : timeSlots.find(s => s.value === timeSlot)?.hours + '小时'}
-            </span>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
-            <span style={{ fontSize: 14, color: '#666' }}>驻店人数</span>
-            <span style={{ fontSize: 14, fontWeight: 600 }}>{riderCount}人</span>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
-            <span style={{ fontSize: 14, color: '#666' }}>预计完成</span>
-            <span style={{ fontSize: 14, fontWeight: 600 }}>{getEstimatedOrders()}单</span>
-          </div>
+      {showRecommendation && riderCount > 0 && (
+        <Card
+          title={<span style={{ fontSize: 16, fontWeight: 'bold' }}>费用预估</span>}
+          style={{ marginBottom: 16, borderRadius: 8 }}
+        >
           <div style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            paddingTop: 12,
-            borderTop: '1px dashed #91d5ff'
+            background: 'linear-gradient(135deg, #e6f7ff 0%, #fff 100%)',
+            padding: '16px',
+            borderRadius: 8,
+            border: '1px solid #91d5ff'
           }}>
-            <span style={{ fontSize: 15, fontWeight: 600 }}>预估费用</span>
-            <span style={{ fontSize: 20, fontWeight: 700, color: '#ff4d4f' }}>
-              ¥{calculateCost()}
-            </span>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
+              <span style={{ fontSize: 14, color: '#666' }}>驻店时长</span>
+              <span style={{ fontSize: 14, fontWeight: 600 }}>
+                {timeSlot === 'custom'
+                  ? `${customEndTime.diff(customStartTime, 'hour', true).toFixed(1)}小时`
+                  : timeSlots.find(s => s.value === timeSlot)?.hours + '小时'}
+              </span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
+              <span style={{ fontSize: 14, color: '#666' }}>驻店人数</span>
+              <span style={{ fontSize: 14, fontWeight: 600 }}>{riderCount}人</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
+              <span style={{ fontSize: 14, color: '#666' }}>预计完成</span>
+              <span style={{ fontSize: 14, fontWeight: 600 }}>{getEstimatedOrders()}单</span>
+            </div>
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              paddingTop: 12,
+              borderTop: '1px dashed #91d5ff'
+            }}>
+              <span style={{ fontSize: 15, fontWeight: 600 }}>预估费用</span>
+              <span style={{ fontSize: 20, fontWeight: 700, color: '#ff4d4f' }}>
+                ¥{calculateCost()}
+              </span>
+            </div>
           </div>
-        </div>
-      </Card>
+        </Card>
+      )}
 
       {/* 确认按钮 */}
-      <Button
-        type="primary"
-        size="large"
-        block
-        icon={<ThunderboltOutlined />}
-        onClick={handleSubmit}
-        style={{ height: 48, fontSize: 16, fontWeight: 'bold' }}
-      >
-        确认发起驻店
-      </Button>
+      {showRecommendation && riderCount > 0 && (
+        <Button
+          type="primary"
+          size="large"
+          block
+          icon={<ThunderboltOutlined />}
+          onClick={handleSubmit}
+          style={{ height: 48, fontSize: 16, fontWeight: 'bold' }}
+        >
+          确认发起驻店
+        </Button>
+      )}
     </div>
   );
 }

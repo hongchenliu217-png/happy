@@ -58,38 +58,6 @@ export default function Orders() {
     }
   };
 
-  const simulateOrder = async () => {
-    setLoading(true);
-    try {
-      const sources = ['meituan', 'taobao', 'douyin'];
-      const randomSource = sources[Math.floor(Math.random() * sources.length)];
-
-      const mockOrder = {
-        source: randomSource,
-        status: 'pending',
-        deliveryType: 'third_party',
-        totalAmount: (Math.random() * 50 + 20).toFixed(2),
-        deliveryFee: (Math.random() * 5 + 3).toFixed(2),
-        customerName: `客户${Math.floor(Math.random() * 1000)}`,
-        customerPhone: '138****' + Math.floor(Math.random() * 10000).toString().padStart(4, '0'),
-        deliveryAddress: `测试路${Math.floor(Math.random() * 100)}号${Math.floor(Math.random() * 20) + 1}栋`,
-        latitude: 22.5 + Math.random() * 0.1,
-        longitude: 113.9 + Math.random() * 0.1,
-        items: [
-          { name: '宫保鸡丁', quantity: 1, price: 28 },
-          { name: '米饭', quantity: 2, price: 2 }
-        ]
-      };
-
-      await ordersApi.createOrder(mockOrder);
-      message.success(`${sourceMap[randomSource].text}订单自动进入`);
-      loadOrders();
-    } catch (error) {
-      message.error('模拟订单失败');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleStartPreparing = async (order: Order) => {
     try {
@@ -176,24 +144,10 @@ export default function Orders() {
 
   return (
     <div style={{ padding: '12px', background: '#f5f5f5', minHeight: '100vh' }}>
-      <div style={{ marginBottom: 12 }}>
-        <Button
-          type="primary"
-          icon={<PlusOutlined />}
-          onClick={simulateOrder}
-          loading={loading}
-          block
-          size="large"
-          style={{ height: 48, fontSize: 16, fontWeight: 'bold' }}
-        >
-          模拟上游订单自动进入
-        </Button>
-      </div>
-
       {orders.length === 0 && (
         <Card style={{ textAlign: 'center', padding: '40px 20px' }}>
           <p style={{ color: '#999', fontSize: 14 }}>暂无订单</p>
-          <p style={{ color: '#999', fontSize: 12 }}>点击上方按钮模拟上游订单自动进入</p>
+          <p style={{ color: '#999', fontSize: 12 }}>订单将自动从上游平台进入</p>
         </Card>
       )}
 

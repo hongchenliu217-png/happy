@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Tabs, Button, Card, Tag, Space, message, Modal, Badge, Radio, Row, Col, Statistic, Empty, Select, Switch } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -54,11 +54,32 @@ export default function Orders() {
   const [stationStatus, setStationStatus] = useState<any>(null); // 驻店状态
   const [autoResumeMinutes, setAutoResumeMinutes] = useState(30);
   const [pauseTimer, setPauseTimer] = useState<ReturnType<typeof setTimeout> | null>(null);
+  const [autoDispatchEnabled, setAutoDispatchEnabled] = useState(false);
+  const processedOrderIds = useRef<Set<string>>(new Set());
+  const isFirstLoad = useRef(true);
 
   useEffect(() => {
-    loadOrders();
-    loadPlatforms();
-    loadStationStatus();
+    const init = async () => {
+      // 先加载平台数据
+      await loadPlatforms();
+
+      // 检查是否启用自动发起配送
+      try {
+        const saved = localStorage.getItem('deliverySettings');
+        if (saved) {
+          const settings = JSON.parse(saved);
+          setAutoDispatchEnabled(true);
+          console.log('✅ 自动发起配送已启用，策略:', settings.dispatchStrategy);
+        }
+      } catch {}
+
+      // 然后加载订单
+      await loadOrders();
+      loadStationStatus();
+    };
+
+    init();
+
     const interval = setInterval(() => {
       loadOrders();
       loadStationStatus();
@@ -97,9 +118,45 @@ export default function Orders() {
   const loadOrders = async () => {
     try {
       const { data } = await ordersApi.getOrders();
-      setOrders(data.orders);
+      const newOrders = data.orders;
+
+      console.log(`📊 订单轮询: 总数=${newOrders.length}, autoDispatchEnabled=${autoDispatchEnabled}, platforms=${platforms.length}, isFirstLoad=${isFirstLoad.current}`);
+
+      // 检查是否有新的 pending 订单需要自动发起配送
+      if (autoDispatchEnabled && platforms.length > 0) {
+        const allPendingOrders = newOrders.filter((order: Order) => order.status === 'pending');
+        const currentPendingIds = new Set(allPendingOrders.map(o => o.id));
+
+        // 清理已经不是 pending 状态的订单ID
+        const oldProcessedIds = Array.from(processedOrderIds.current);
+        oldProcessedIds.forEach(id => {
+          if (!currentPendingIds.has(id)) {
+            processedOrderIds.current.delete(id);
+          }
+        });
+
+        const newPendingOrders = allPendingOrders.filter((order: Order) => !processedOrderIds.current.has(order.id));
+
+        console.log(`📋 Pending订单: 总数=${allPendingOrders.length}, 新订单=${newPendingOrders.length}, 已处理=${processedOrderIds.current.size}`);
+
+        if (newPendingOrders.length > 0) {
+          // 首次加载时，只处理最新的订单，避免处理历史订单
+          if (isFirstLoad.current) {
+            console.log(`⏭️ 首次加载，跳过 ${newPendingOrders.length} 个历史订单`);
+            newPendingOrders.forEach(order => processedOrderIds.current.add(order.id));
+            isFirstLoad.current = false;
+          } else {
+            console.log(`🚀 检测到 ${newPendingOrders.length} 个新订单，准备自动发起配送`);
+            autoDispatchOrders(newPendingOrders);
+          }
+        } else if (isFirstLoad.current) {
+          isFirstLoad.current = false;
+        }
+      }
+
+      setOrders(newOrders);
     } catch (error) {
-      // 静默失败
+      console.error('❌ 加载订单失败:', error);
     }
   };
 
@@ -107,8 +164,9 @@ export default function Orders() {
     try {
       const { data } = await client.get('/platforms?type=downstream');
       setPlatforms(data);
+      console.log('✅ 运力平台已加载:', data.length, '个');
     } catch (error) {
-      console.error('加载平台失败:', error);
+      console.error('❌ 加载平台失败:', error);
     }
   };
 
@@ -128,47 +186,107 @@ export default function Orders() {
     setStationStatus(null); // 无驻店时
   };
 
+  // 自动发起配送
+  const autoDispatchOrders = async (pendingOrders: Order[]) => {
+    try {
+      const saved = localStorage.getItem('deliverySettings');
+      const deliverySettings = saved ? JSON.parse(saved) : null;
+
+      if (!deliverySettings) {
+        console.log('❌ 未找到配送设置');
+        return;
+      }
+
+      console.log('📋 配送策略:', deliverySettings.dispatchStrategy);
+
+      for (const order of pendingOrders) {
+        // 标记为已处理
+        processedOrderIds.current.add(order.id);
+
+        // 生成模拟报价
+        const prices = platforms.map(p => ({
+          ...p,
+          price: (Math.random() * 3 + 6).toFixed(1),
+          estimatedTime: Math.floor(Math.random() * 10 + 20),
+          distance: (Math.random() * 2 + 1).toFixed(1)
+        }));
+
+        if (prices.length === 0) continue;
+
+        const strategy = deliverySettings.dispatchStrategy;
+        let selectedPlatform: string | null = null;
+
+        if (strategy === 'low-price') {
+          // 低价优先
+          const cheapest = prices.reduce((a, b) => parseFloat(a.price) < parseFloat(b.price) ? a : b);
+          selectedPlatform = cheapest.code;
+          console.log(`💰 低价优先: 选择 ${cheapest.name} (¥${cheapest.price})`);
+        } else if (strategy === 'fastest') {
+          // 速度优先
+          const fastest = prices.reduce((a, b) => a.estimatedTime < b.estimatedTime ? a : b);
+          selectedPlatform = fastest.code;
+          console.log(`⚡ 速度优先: 选择 ${fastest.name} (${fastest.estimatedTime}分钟)`);
+        } else if (strategy === 'balanced') {
+          // 智能化：按时段策略
+          const now = new Date();
+          const currentTime = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+          const activeStrategy = deliverySettings.timeBasedStrategies?.find((s: any) => {
+            if (!s.enabled) return false;
+            return currentTime >= s.startTime && currentTime <= s.endTime;
+          });
+          if (activeStrategy?.strategy === 'low-price') {
+            const cheapest = prices.reduce((a, b) => parseFloat(a.price) < parseFloat(b.price) ? a : b);
+            selectedPlatform = cheapest.code;
+          } else if (activeStrategy?.strategy === 'fastest') {
+            const fastest = prices.reduce((a, b) => a.estimatedTime < b.estimatedTime ? a : b);
+            selectedPlatform = fastest.code;
+          } else {
+            const cheapest = prices.reduce((a, b) => parseFloat(a.price) < parseFloat(b.price) ? a : b);
+            selectedPlatform = cheapest.code;
+          }
+        } else if (strategy === 'custom') {
+          // 按距离
+          const orderDistance = parseFloat((Math.random() * 2 + 1).toFixed(1));
+          const rule = deliverySettings.distanceBasedPlatforms?.find((r: any) =>
+            orderDistance >= r.minDistance && orderDistance < r.maxDistance
+          );
+          if (rule) selectedPlatform = rule.platform;
+        }
+
+        if (selectedPlatform) {
+          const platform = prices.find(p => p.code === selectedPlatform);
+
+          // 自动发起配送
+          await ordersApi.updateOrderStatus(order.id, 'delivery_calling');
+          message.info(`订单 ${order.orderNo?.slice(-6)} 自动呼叫${platform?.name}`);
+          console.log(`📞 订单 ${order.orderNo} 呼叫 ${platform?.name}`);
+
+          // 模拟运力接单
+          setTimeout(async () => {
+            try {
+              await ordersApi.dispatchOrder(order.id, selectedPlatform!);
+              await ordersApi.updateOrderStatus(order.id, 'delivery_accepted');
+              message.success(`${platform?.name}骑手已接单`);
+              loadOrders();
+            } catch {}
+          }, 5000);
+        }
+      }
+    } catch (error) {
+      console.error('❌ 自动发起配送失败:', error);
+    }
+  };
+
   // 计算统计数据
   const stats = {
     total: orders.length,
     pending: orders.filter(o => o.status === 'pending').length,
+    pickup: orders.filter(o => o.status === 'delivery_accepted').length,
     delivering: orders.filter(o => ['picked_up', 'delivering'].includes(o.status)).length,
     delivered: orders.filter(o => o.status === 'delivered').length,
-    totalAmount: orders.reduce((sum, o) => sum + parseFloat(o.totalAmount || '0'), 0).toFixed(2)
+    totalAmount: orders.reduce((sum, o) => sum + parseFloat(o.totalAmount || '0'), 0).toFixed(2) as string
   };
 
-  const simulateOrder = async () => {
-    setLoading(true);
-    try {
-      const sources = ['meituan', 'taobao', 'douyin'];
-      const randomSource = sources[Math.floor(Math.random() * sources.length)];
-
-      const mockOrder = {
-        source: randomSource,
-        status: 'pending',
-        deliveryType: 'third_party',
-        totalAmount: (Math.random() * 50 + 20).toFixed(2),
-        deliveryFee: (Math.random() * 5 + 3).toFixed(2),
-        customerName: `客户${Math.floor(Math.random() * 1000)}`,
-        customerPhone: '138****' + Math.floor(Math.random() * 10000).toString().padStart(4, '0'),
-        deliveryAddress: `测试路${Math.floor(Math.random() * 100)}号${Math.floor(Math.random() * 20) + 1}栋`,
-        latitude: 22.5 + Math.random() * 0.1,
-        longitude: 113.9 + Math.random() * 0.1,
-        items: [
-          { name: '宫保鸡丁', quantity: 1, price: 28 },
-          { name: '米饭', quantity: 2, price: 2 }
-        ]
-      };
-
-      await ordersApi.createOrder(mockOrder);
-      message.success(`${sourceMap[randomSource].text}订单自动进入`);
-      loadOrders();
-    } catch (error) {
-      message.error('模拟订单失败');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleStartPreparing = async (order: Order) => {
     try {
@@ -191,6 +309,55 @@ export default function Orders() {
     }));
 
     setPlatformPrices(prices);
+
+    // 读取配送设置，自动按策略预选平台
+    try {
+      const saved = localStorage.getItem('deliverySettings');
+      const deliverySettings = saved ? JSON.parse(saved) : null;
+      if (deliverySettings && prices.length > 0) {
+        const strategy = deliverySettings.dispatchStrategy;
+        let recommended: string | null = null;
+
+        if (strategy === 'low-price') {
+          // 低价优先：选价格最低的
+          const cheapest = prices.reduce((a, b) => parseFloat(a.price) < parseFloat(b.price) ? a : b);
+          recommended = cheapest.code;
+        } else if (strategy === 'fastest') {
+          // 速度优先：选预计时间最短的
+          const fastest = prices.reduce((a, b) => a.estimatedTime < b.estimatedTime ? a : b);
+          recommended = fastest.code;
+        } else if (strategy === 'balanced') {
+          // 智能化：按时段策略
+          const now = new Date();
+          const currentTime = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+          const activeStrategy = deliverySettings.timeBasedStrategies?.find((s: any) => {
+            if (!s.enabled) return false;
+            return currentTime >= s.startTime && currentTime <= s.endTime;
+          });
+          if (activeStrategy?.strategy === 'low-price') {
+            const cheapest = prices.reduce((a, b) => parseFloat(a.price) < parseFloat(b.price) ? a : b);
+            recommended = cheapest.code;
+          } else if (activeStrategy?.strategy === 'fastest') {
+            const fastest = prices.reduce((a, b) => a.estimatedTime < b.estimatedTime ? a : b);
+            recommended = fastest.code;
+          } else {
+            // 无匹配时段，默认低价
+            const cheapest = prices.reduce((a, b) => parseFloat(a.price) < parseFloat(b.price) ? a : b);
+            recommended = cheapest.code;
+          }
+        } else if (strategy === 'custom') {
+          // 按距离：取第一个匹配的距离规则
+          const orderDistance = parseFloat((Math.random() * 2 + 1).toFixed(1));
+          const rule = deliverySettings.distanceBasedPlatforms?.find((r: any) =>
+            orderDistance >= r.minDistance && orderDistance < r.maxDistance
+          );
+          if (rule) recommended = rule.platform;
+        }
+
+        if (recommended) setSelectedPlatform(recommended);
+      }
+    } catch {}
+
     setDispatchModalVisible(true);
   };
 
@@ -501,7 +668,7 @@ export default function Orders() {
     { key: 'new', label: <Badge count={stats.pending} offset={[10, 0]}><span>新订单</span></Badge> },
     { key: 'pre', label: '预订单' },
     { key: 'waiting', label: '待抢单' },
-    { key: 'pickup', label: '待取货' },
+    { key: 'pickup', label: <Badge count={stats.pickup} offset={[10, 0]}><span>待取货</span></Badge> },
     { key: 'delivering', label: <Badge count={stats.delivering} offset={[10, 0]}><span>配送中</span></Badge> },
     { key: 'exception', label: '异常' },
     { key: 'refund', label: '退款' }
@@ -657,48 +824,6 @@ export default function Orders() {
 
       {/* 订单列表 */}
       <div style={{ padding: isMobile ? '12px' : '16px' }}>
-        {/* 快捷操作按钮 */}
-        <Row gutter={10} style={{ marginBottom: isMobile ? 12 : 16 }}>
-          <Col flex="auto">
-            <Button
-              type="primary"
-              icon={<PlusOutlined />}
-              onClick={simulateOrder}
-              loading={loading}
-              block
-              size={isMobile ? 'middle' : 'large'}
-              style={{
-                height: isMobile ? 44 : 52,
-                fontSize: isMobile ? 14 : 16,
-                fontWeight: 'bold',
-                borderRadius: isMobile ? 8 : 12,
-                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                border: 'none',
-                boxShadow: '0 4px 12px rgba(102, 126, 234, 0.4)'
-              }}
-            >
-              模拟上游订单自动进入
-            </Button>
-          </Col>
-          <Col>
-            <Button
-              danger={!paused}
-              type={paused ? 'primary' : 'default'}
-              icon={paused ? <PlayCircleOutlined /> : <PauseCircleOutlined />}
-              onClick={togglePause}
-              size={isMobile ? 'middle' : 'large'}
-              style={{
-                height: isMobile ? 44 : 52,
-                borderRadius: isMobile ? 8 : 12,
-                fontWeight: 'bold',
-                fontSize: isMobile ? 13 : 14,
-              }}
-            >
-              {paused ? '恢复' : '暂停'}
-            </Button>
-          </Col>
-        </Row>
-
         {/* 订单列表或空状态 */}
         {filteredOrders.length === 0 ? (
           <Card style={{
@@ -713,7 +838,7 @@ export default function Orders() {
                 <div>
                   <p style={{ color: '#999', fontSize: 15, marginBottom: 8 }}>暂无订单</p>
                   <p style={{ color: '#bfbfbf', fontSize: 13 }}>
-                    点击上方按钮模拟订单自动进入
+                    订单将自动从上游平台进入
                   </p>
                 </div>
               }
@@ -763,6 +888,11 @@ export default function Orders() {
         <div style={{ marginBottom: 16 }}>
           <p style={{ marginBottom: 16, color: '#666', fontSize: isMobile ? 13 : 14, fontWeight: 'bold' }}>
             各平台实时报价：
+            {selectedPlatform && (
+              <span style={{ fontSize: 11, color: '#52c41a', fontWeight: 'normal', marginLeft: 8 }}>
+                ✓ 已按配送策略自动推荐
+              </span>
+            )}
           </p>
 
           <Radio.Group
@@ -786,8 +916,11 @@ export default function Orders() {
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div>
-                      <div style={{ fontSize: isMobile ? 14 : 16, fontWeight: 'bold', marginBottom: 4 }}>
+                      <div style={{ fontSize: isMobile ? 14 : 16, fontWeight: 'bold', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
                         {platform.name}
+                        {selectedPlatform === platform.code && (
+                          <Tag color="blue" style={{ fontSize: 10, lineHeight: '16px', borderRadius: 8, margin: 0, padding: '0 6px' }}>推荐</Tag>
+                        )}
                       </div>
                       <Space size={isMobile ? 12 : 16}>
                         <span style={{ fontSize: isMobile ? 11 : 12, color: '#999' }}>

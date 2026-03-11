@@ -141,6 +141,55 @@ const strategies = [
 
 // --- 主组件 ---
 
+const defaultSettings: DeliverySettings = {
+  dispatchStrategy: 'balanced',
+  platformPriority: ['dada', 'sf', 'shansong'],
+  distanceBasedPlatforms: [
+    { id: '1', minDistance: 0, maxDistance: 3, platform: 'dada' },
+    { id: '2', minDistance: 3, maxDistance: 5, platform: 'sf' },
+    { id: '3', minDistance: 5, maxDistance: 10, platform: 'shansong' }
+  ],
+  timeBasedStrategies: [
+    { id: '1', name: '早餐时段', startTime: '07:00', endTime: '09:00', strategy: 'fastest', enabled: true },
+    { id: '2', name: '午餐高峰', startTime: '11:00', endTime: '13:00', strategy: 'fastest', enabled: true },
+    { id: '3', name: '晚餐高峰', startTime: '17:00', endTime: '20:00', strategy: 'fastest', enabled: true },
+    { id: '4', name: '夜宵时段', startTime: '21:00', endTime: '23:59', strategy: 'low-price', enabled: false }
+  ],
+  enableTimeBasedStrategy: false,
+  orderAmountTiers: [
+    { id: '1', minAmount: 0, maxAmount: 30, strategy: 'low-price' },
+    { id: '2', minAmount: 30, maxAmount: 100, strategy: 'fastest' },
+    { id: '3', minAmount: 100, maxAmount: 999999, strategy: 'custom-platform', platformPreference: 'sf' }
+  ],
+  enableOrderAmountTier: false,
+  strategyPriority: 'amount-based',
+  concurrentPricing: false,
+  concurrentPricingTimeout: 10,
+  retryStrategy: { enabled: true, maxRetries: 3, retryInterval: 30, autoSwitchPlatform: true, fallbackToSelfDelivery: false },
+  prioritySelfDelivery: true,
+  selfDeliveryAutoFallback: true,
+  selfDeliveryMaxOrders: 10,
+  maxDeliveryFee: 15,
+  lowPriceDispatch: true,
+  budgetAlertThreshold: 1000,
+  maxDeliveryDistance: 5,
+  enableAreaRestriction: false,
+  deliveryTimeoutAlert: true,
+  timeoutMinutes: 60,
+  autoCancelTimeout: false,
+  smartDispatch: true,
+  peakHourBoost: false,
+  noRiderEscalation: {
+    enabled: true,
+    waitPerPlatform: 60,
+    postExhaustionWait: 120,
+    autoTipEnabled: true,
+    tipAmount: 3,
+    maxTipAmount: 15,
+    tipIncrementRounds: 3,
+  },
+};
+
 export default function DeliverySettings() {
   const location = useLocation();
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
@@ -175,53 +224,12 @@ export default function DeliverySettings() {
     window.history.replaceState({}, '');
   }, [location.state]);
 
-  const [settings, setSettings] = useState<DeliverySettings>({
-    dispatchStrategy: 'balanced',
-    platformPriority: ['dada', 'sf', 'shansong'],
-    distanceBasedPlatforms: [
-      { id: '1', minDistance: 0, maxDistance: 3, platform: 'dada' },
-      { id: '2', minDistance: 3, maxDistance: 5, platform: 'sf' },
-      { id: '3', minDistance: 5, maxDistance: 10, platform: 'shansong' }
-    ],
-    timeBasedStrategies: [
-      { id: '1', name: '早餐时段', startTime: '07:00', endTime: '09:00', strategy: 'fastest', enabled: true },
-      { id: '2', name: '午餐高峰', startTime: '11:00', endTime: '13:00', strategy: 'fastest', enabled: true },
-      { id: '3', name: '晚餐高峰', startTime: '17:00', endTime: '20:00', strategy: 'fastest', enabled: true },
-      { id: '4', name: '夜宵时段', startTime: '21:00', endTime: '23:59', strategy: 'low-price', enabled: false }
-    ],
-    enableTimeBasedStrategy: false,
-    orderAmountTiers: [
-      { id: '1', minAmount: 0, maxAmount: 30, strategy: 'low-price' },
-      { id: '2', minAmount: 30, maxAmount: 100, strategy: 'fastest' },
-      { id: '3', minAmount: 100, maxAmount: 999999, strategy: 'custom-platform', platformPreference: 'sf' }
-    ],
-    enableOrderAmountTier: false,
-    strategyPriority: 'amount-based',
-    concurrentPricing: false,
-    concurrentPricingTimeout: 10,
-    retryStrategy: { enabled: true, maxRetries: 3, retryInterval: 30, autoSwitchPlatform: true, fallbackToSelfDelivery: false },
-    prioritySelfDelivery: true,
-    selfDeliveryAutoFallback: true,
-    selfDeliveryMaxOrders: 10,
-    maxDeliveryFee: 15,
-    lowPriceDispatch: true,
-    budgetAlertThreshold: 1000,
-    maxDeliveryDistance: 5,
-    enableAreaRestriction: false,
-    deliveryTimeoutAlert: true,
-    timeoutMinutes: 60,
-    autoCancelTimeout: false,
-    smartDispatch: true,
-    peakHourBoost: false,
-    noRiderEscalation: {
-      enabled: true,
-      waitPerPlatform: 60,
-      postExhaustionWait: 120,
-      autoTipEnabled: true,
-      tipAmount: 3,
-      maxTipAmount: 15,
-      tipIncrementRounds: 3,
-    },
+  const [settings, setSettings] = useState<DeliverySettings>(() => {
+    try {
+      const saved = localStorage.getItem('deliverySettings');
+      if (saved) return { ...defaultSettings, ...JSON.parse(saved) };
+    } catch {}
+    return defaultSettings;
   });
 
   const [loading, setLoading] = useState(false);
@@ -230,6 +238,7 @@ export default function DeliverySettings() {
     setLoading(true);
     try {
       await new Promise(resolve => setTimeout(resolve, 500));
+      localStorage.setItem('deliverySettings', JSON.stringify(settings));
       message.success('配送设置已保存');
     } catch {
       message.error('保存失败，请重试');

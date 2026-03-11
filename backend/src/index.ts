@@ -7,6 +7,7 @@ import { initDb } from './database/memory-db';
 import { logger } from './utils/logger';
 import routes from './routes';
 import { errorHandler } from './middleware/error-handler';
+import { startOrderSimulator } from './services/order-simulator';
 
 dotenv.config();
 
@@ -40,6 +41,7 @@ const PORT = process.env.PORT || 3000;
 initDb()
   .then(() => {
     logger.info('数据库初始化成功');
+    startOrderSimulator(); // 启动订单模拟器
     httpServer.listen(PORT, () => {
       logger.info(`服务器运行在端口 ${PORT}`);
     });
