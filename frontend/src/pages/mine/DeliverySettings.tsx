@@ -72,7 +72,7 @@ interface NoRiderEscalation {
 }
 
 interface DeliverySettings {
-  dispatchStrategy: 'low-price' | 'fastest' | 'balanced' | 'custom';
+  dispatchStrategy: 'low-price' | 'fastest' | 'balanced' | 'custom' | 'ai-smart';
   platformPriority: string[];
   distanceBasedPlatforms: DistanceBasedPlatform[];
   timeBasedStrategies: TimeBasedStrategy[];
@@ -135,14 +135,15 @@ const SettingRow = ({ title, desc, children, noBorder }: {
 const strategies = [
   { key: 'low-price' as const, label: '低价优先', desc: '自动选择配送费最低的平台', icon: <DollarOutlined />, color: '#fa8c16', bg: '#fff7e6' },
   { key: 'fastest' as const, label: '速度优先', desc: '优先选择配送速度最快的平台', icon: <RocketOutlined />, color: '#1890ff', bg: '#e6f7ff' },
-  { key: 'balanced' as const, label: '智能化设置', desc: '分时段或按金额智能匹配最优方案', icon: <ThunderboltOutlined />, color: '#52c41a', bg: '#f6ffed', recommended: true },
+  { key: 'balanced' as const, label: '智能化设置', desc: '分时段或按金额智能匹配最优方案', icon: <ThunderboltOutlined />, color: '#52c41a', bg: '#f6ffed' },
   { key: 'custom' as const, label: '按距离派单', desc: '根据配送距离自动选择运力平台', icon: <SettingOutlined />, color: '#722ed1', bg: '#f9f0ff' },
+  { key: 'ai-smart' as const, label: 'AI 智能派单', desc: '综合价格、速度、时段、订单特征自动决策', icon: <ThunderboltOutlined />, color: '#eb2f96', bg: '#fff0f6', recommended: true },
 ];
 
 // --- 主组件 ---
 
 const defaultSettings: DeliverySettings = {
-  dispatchStrategy: 'balanced',
+  dispatchStrategy: 'ai-smart',
   platformPriority: ['dada', 'sf', 'shansong'],
   distanceBasedPlatforms: [
     { id: '1', minDistance: 0, maxDistance: 3, platform: 'dada' },
@@ -180,7 +181,7 @@ const defaultSettings: DeliverySettings = {
   smartDispatch: true,
   peakHourBoost: false,
   noRiderEscalation: {
-    enabled: true,
+    enabled: false,
     waitPerPlatform: 60,
     postExhaustionWait: 120,
     autoTipEnabled: true,
@@ -227,7 +228,19 @@ export default function DeliverySettings() {
   const [settings, setSettings] = useState<DeliverySettings>(() => {
     try {
       const saved = localStorage.getItem('deliverySettings');
-      if (saved) return { ...defaultSettings, ...JSON.parse(saved) };
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        // 强制使用新的默认值：无人接单自动升级默认关闭
+        return {
+          ...defaultSettings,
+          ...parsed,
+          noRiderEscalation: {
+            ...defaultSettings.noRiderEscalation,
+            ...(parsed.noRiderEscalation || {}),
+            enabled: false  // 强制关闭
+          }
+        };
+      }
     } catch {}
     return defaultSettings;
   });
@@ -320,14 +333,13 @@ export default function DeliverySettings() {
       <Space direction="vertical" size={16} style={{ width: '100%' }}>
 
         {/* ===== 派单策略选择 ===== */}
-        {/* ===== 派单策略选择 ===== */}
         <Card size="small" style={cardStyle} styles={{ body: { padding: pad } }}>
           <SectionTitle icon={<ThunderboltOutlined />} title="派单策略" />
           <Row gutter={[12, 12]}>
             {strategies.map(s => {
               const active = settings.dispatchStrategy === s.key;
               return (
-                <Col xs={12} sm={12} md={12} lg={6} key={s.key}>
+                <Col xs={12} sm={12} md={12} lg={s.key === 'ai-smart' ? 24 : 6} key={s.key}>
                   <div
                     onClick={() => { updateSettings({ dispatchStrategy: s.key }); if (s.key !== 'balanced') setIntelligentSubStrategy(null); }}
                     style={{
@@ -335,30 +347,85 @@ export default function DeliverySettings() {
                       background: active ? s.bg : '#fafafa',
                       border: `2px solid ${active ? s.color : '#eee'}`,
                       transition: 'all 0.25s ease',
+                      display: s.key === 'ai-smart' ? 'flex' : 'block',
+                      alignItems: s.key === 'ai-smart' ? 'center' : undefined,
+                      gap: s.key === 'ai-smart' ? 12 : undefined,
                     }}
                   >
                     {s.recommended && (
-                      <Tag color="success" style={{ position: 'absolute', top: 6, right: 6, fontSize: 10, lineHeight: '16px', borderRadius: 8, margin: 0, padding: '0 6px' }}>
-                        推荐
+                      <Tag color={s.key === 'ai-smart' ? 'magenta' : 'success'} style={{ position: 'absolute', top: 6, right: 6, fontSize: 10, lineHeight: '16px', borderRadius: 8, margin: 0, padding: '0 6px' }}>
+                        {s.key === 'ai-smart' ? '✨ AI' : '推荐'}
                       </Tag>
                     )}
-                    {active && (
+                    {active && s.key !== 'ai-smart' && (
                       <CheckCircleFilled style={{ position: 'absolute', top: 8, left: 8, fontSize: 14, color: s.color }} />
                     )}
                     <div style={{
                       width: 36, height: 36, borderRadius: 10, background: '#fff',
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      marginBottom: 10, boxShadow: `0 2px 6px ${s.color}20`,
+                      marginBottom: s.key === 'ai-smart' ? 0 : 10,
+                      flexShrink: 0,
+                      boxShadow: `0 2px 6px ${s.color}20`,
                     }}>
                       <span style={{ fontSize: 18, color: s.color, display: 'flex' }}>{s.icon}</span>
                     </div>
-                    <div style={{ fontSize: 14, fontWeight: 600, color: '#262626', marginBottom: 4 }}>{s.label}</div>
-                    <div style={{ fontSize: 11, color: '#999', lineHeight: 1.5 }}>{s.desc}</div>
+                    <div style={{ flex: s.key === 'ai-smart' ? 1 : undefined }}>
+                      <div style={{ fontSize: 14, fontWeight: 600, color: '#262626', marginBottom: 4 }}>{s.label}</div>
+                      <div style={{ fontSize: 11, color: '#999', lineHeight: 1.5 }}>{s.desc}</div>
+                    </div>
+                    {active && s.key === 'ai-smart' && (
+                      <CheckCircleFilled style={{ fontSize: 18, color: s.color, flexShrink: 0 }} />
+                    )}
                   </div>
                 </Col>
               );
             })}
           </Row>
+
+          {/* AI 智能派单展开详情 */}
+          {settings.dispatchStrategy === 'ai-smart' && (
+            <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div style={{ padding: '12px', background: '#fff0f6', borderRadius: 10, border: '1px solid #ffadd2' }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: '#eb2f96', marginBottom: 10 }}>
+                  📊 AI 评分维度
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {[
+                    { label: '💰 价格', weight: 30, desc: '报价越低，得分越高' },
+                    { label: '⚡ 速度', weight: 30, desc: '预计送达越快，得分越高' },
+                    { label: '🕐 时段匹配', weight: 20, desc: '该平台在当前时段的历史接单率' },
+                    { label: '📦 订单特征', weight: 20, desc: '订单金额与平台擅长领域匹配度' },
+                  ].map(item => (
+                    <div key={item.label} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ fontSize: 12, color: '#333', minWidth: 80 }}>{item.label}</span>
+                      <div style={{ flex: 1, height: 6, background: '#ffd6e7', borderRadius: 3, overflow: 'hidden' }}>
+                        <div style={{ width: `${item.weight * 3}%`, height: '100%', background: '#eb2f96', borderRadius: 3 }} />
+                      </div>
+                      <span style={{ fontSize: 11, color: '#999', minWidth: 30 }}>{item.weight}%</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div style={{ padding: '12px', background: '#fff7e6', borderRadius: 10, border: '1px solid #ffe7ba' }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: '#fa8c16', marginBottom: 8 }}>🧠 智能规则</div>
+                {[
+                  '大额订单（>¥100）自动提升速度权重，优先保障体验',
+                  '高峰时段（11-13点 / 17-20点）自动提升速度权重',
+                  '某平台超 60 秒无人接单，自动切换次优平台',
+                ].map((rule, i) => (
+                  <div key={i} style={{ fontSize: 12, color: '#666', display: 'flex', gap: 6, marginBottom: 4 }}>
+                    <span style={{ color: '#fa8c16', flexShrink: 0 }}>·</span>
+                    <span>{rule}</span>
+                  </div>
+                ))}
+              </div>
+
+              <div style={{ padding: '8px 12px', background: '#f6ffed', borderRadius: 8, fontSize: 12, color: '#52c41a' }}>
+                💡 选择 AI 智能派单后，新订单将全自动处理，无需手动操作
+              </div>
+            </div>
+          )}
         </Card>
 
         {/* ===== 距离分段配送 ===== */}
@@ -636,17 +703,6 @@ export default function DeliverySettings() {
           )}
         </Card>
         </div>
-
-        {/* ===== 其他设置 ===== */}
-        <Card size="small" style={cardStyle} styles={{ body: { padding: pad } }}>
-          <SectionTitle icon={<SettingOutlined />} title="其他设置" />
-          <SettingRow title="智能派单" desc="AI 智能选择最优配送方案">
-            <Switch checked={settings.smartDispatch} onChange={v => updateSettings({ smartDispatch: v })} />
-          </SettingRow>
-          <SettingRow title="高峰时段加价" desc="高峰期自动提高配送费预算" noBorder>
-            <Switch checked={settings.peakHourBoost} onChange={v => updateSettings({ peakHourBoost: v })} />
-          </SettingRow>
-        </Card>
 
       </Space>
     </div>
