@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Tabs, Button, Card, Tag, Space, message, Modal, Badge, Radio, Row, Col, Statistic, Empty, Select, Switch } from 'antd';
+import { Tabs, Button, Card, Tag, Space, message, Modal, Badge, Radio, Row, Col, Statistic, Empty, Select, Switch, Alert } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import {
   CheckOutlined,
@@ -60,20 +60,20 @@ export default function Orders() {
 
   useEffect(() => {
     const init = async () => {
-      // 先加载平台数据
       await loadPlatforms();
 
-      // 检查是否启用自动发起配送
+      // 检查是否启用智能派单
       try {
         const saved = localStorage.getItem('deliverySettings');
         if (saved) {
-          const settings = JSON.parse(saved);
-          setAutoDispatchEnabled(true);
-          console.log('✅ 自动发起配送已启用，策略:', settings.dispatchStrategy);
+          const s = JSON.parse(saved);
+          if (s.dispatchStrategy === 'ai-smart' || s.smartDispatch) {
+            setAutoDispatchEnabled(true);
+            console.log('✅ AI 智能派单已启用');
+          }
         }
       } catch {}
 
-      // 然后加载订单
       await loadOrders();
       loadStationStatus();
     };
@@ -186,94 +186,106 @@ export default function Orders() {
     setStationStatus(null); // 无驻店时
   };
 
-  // 自动发起配送
+  // AI 多维度评分派单
   const autoDispatchOrders = async (pendingOrders: Order[]) => {
     try {
       const saved = localStorage.getItem('deliverySettings');
       const deliverySettings = saved ? JSON.parse(saved) : null;
 
-      if (!deliverySettings) {
-        console.log('❌ 未找到配送设置');
-        return;
-      }
-
-      console.log('📋 配送策略:', deliverySettings.dispatchStrategy);
-
       for (const order of pendingOrders) {
-        // 标记为已处理
         processedOrderIds.current.add(order.id);
 
-        // 生成模拟报价
+        // 生成各平台模拟报价
         const prices = platforms.map(p => ({
           ...p,
-          price: (Math.random() * 3 + 6).toFixed(1),
+          price: parseFloat((Math.random() * 3 + 6).toFixed(1)),
           estimatedTime: Math.floor(Math.random() * 10 + 20),
-          distance: (Math.random() * 2 + 1).toFixed(1)
+          distance: parseFloat((Math.random() * 2 + 1).toFixed(1))
         }));
 
         if (prices.length === 0) continue;
 
-        const strategy = deliverySettings.dispatchStrategy;
-        let selectedPlatform: string | null = null;
+        const now = new Date();
+        const hour = now.getHours();
+        const isPeakHour = (hour >= 11 && hour < 13) || (hour >= 17 && hour < 20);
+        const isHighValue = parseFloat(order.totalAmount || '0') > 100;
 
-        if (strategy === 'low-price') {
-          // 低价优先
-          const cheapest = prices.reduce((a, b) => parseFloat(a.price) < parseFloat(b.price) ? a : b);
-          selectedPlatform = cheapest.code;
-          console.log(`💰 低价优先: 选择 ${cheapest.name} (¥${cheapest.price})`);
-        } else if (strategy === 'fastest') {
-          // 速度优先
-          const fastest = prices.reduce((a, b) => a.estimatedTime < b.estimatedTime ? a : b);
-          selectedPlatform = fastest.code;
-          console.log(`⚡ 速度优先: 选择 ${fastest.name} (${fastest.estimatedTime}分钟)`);
-        } else if (strategy === 'balanced') {
-          // 智能化：按时段策略
-          const now = new Date();
-          const currentTime = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
-          const activeStrategy = deliverySettings.timeBasedStrategies?.find((s: any) => {
-            if (!s.enabled) return false;
-            return currentTime >= s.startTime && currentTime <= s.endTime;
-          });
-          if (activeStrategy?.strategy === 'low-price') {
-            const cheapest = prices.reduce((a, b) => parseFloat(a.price) < parseFloat(b.price) ? a : b);
-            selectedPlatform = cheapest.code;
-          } else if (activeStrategy?.strategy === 'fastest') {
-            const fastest = prices.reduce((a, b) => a.estimatedTime < b.estimatedTime ? a : b);
-            selectedPlatform = fastest.code;
-          } else {
-            const cheapest = prices.reduce((a, b) => parseFloat(a.price) < parseFloat(b.price) ? a : b);
-            selectedPlatform = cheapest.code;
-          }
-        } else if (strategy === 'custom') {
-          // 按距离
-          const orderDistance = parseFloat((Math.random() * 2 + 1).toFixed(1));
-          const rule = deliverySettings.distanceBasedPlatforms?.find((r: any) =>
-            orderDistance >= r.minDistance && orderDistance < r.maxDistance
+        // 动态权重：高峰期或大额订单提升速度权重
+        const weightPrice = isPeakHour || isHighValue ? 20 : 30;
+        const weightSpeed = isPeakHour || isHighValue ? 40 : 30;
+        const weightTimeSlot = 20;
+        const weightOrderFeature = 20;
+
+        // 各平台历史时段接单率（mock，后续可从后端获取）
+        const platformTimeSlotScore: Record<string, number> = {
+          dada: isPeakHour ? 85 : 70,
+          sf: isPeakHour ? 75 : 90,
+          shansong: isPeakHour ? 90 : 75,
+        };
+
+        // 订单特征匹配分（大额订单顺丰更匹配，近距离闪送更匹配）
+        const getFeatureScore = (code: string) => {
+          if (isHighValue) return code === 'sf' ? 95 : 70;
+          const dist = prices.find(p => p.code === code)?.distance || 1;
+          if (dist < 2) return code === 'shansong' ? 90 : 70;
+          return 80;
+        };
+
+        // 价格归一化（最低价得100分）
+        const minPrice = Math.min(...prices.map(p => p.price));
+        const maxPrice = Math.max(...prices.map(p => p.price));
+
+        // 速度归一化（最快得100分）
+        const minTime = Math.min(...prices.map(p => p.estimatedTime));
+        const maxTime = Math.max(...prices.map(p => p.estimatedTime));
+
+        // 综合评分
+        const scored = prices.map(p => {
+          const priceScore = maxPrice === minPrice ? 100 : ((maxPrice - p.price) / (maxPrice - minPrice)) * 100;
+          const speedScore = maxTime === minTime ? 100 : ((maxTime - p.estimatedTime) / (maxTime - minTime)) * 100;
+          const timeSlotScore = platformTimeSlotScore[p.code] || 75;
+          const featureScore = getFeatureScore(p.code);
+
+          const totalScore = Math.round(
+            (priceScore * weightPrice +
+            speedScore * weightSpeed +
+            timeSlotScore * weightTimeSlot +
+            featureScore * weightOrderFeature) / 100
           );
-          if (rule) selectedPlatform = rule.platform;
-        }
 
-        if (selectedPlatform) {
-          const platform = prices.find(p => p.code === selectedPlatform);
+          return { ...p, totalScore, priceScore: Math.round(priceScore), speedScore: Math.round(speedScore) };
+        });
 
-          // 自动发起配送
-          await ordersApi.updateOrderStatus(order.id, 'delivery_calling');
-          message.info(`订单 ${order.orderNo?.slice(-6)} 自动呼叫${platform?.name}`);
-          console.log(`📞 订单 ${order.orderNo} 呼叫 ${platform?.name}`);
+        // 选出评分最高的平台
+        const best = scored.reduce((a, b) => a.totalScore > b.totalScore ? a : b);
 
-          // 模拟运力接单
-          setTimeout(async () => {
-            try {
-              await ordersApi.dispatchOrder(order.id, selectedPlatform!);
-              await ordersApi.updateOrderStatus(order.id, 'delivery_accepted');
-              message.success(`${platform?.name}骑手已接单`);
-              loadOrders();
-            } catch {}
-          }, 5000);
-        }
+        const reason = isPeakHour ? '高峰时段·速度优先' : isHighValue ? '大额订单·品质优先' : '综合最优';
+
+        await ordersApi.updateOrderStatus(order.id, 'delivery_calling');
+        message.info({
+          content: (
+            <span>
+              AI 自动派单 → <strong>{best.name}</strong>
+              <span style={{ color: '#52c41a', marginLeft: 6 }}>综合评分 {best.totalScore}分</span>
+              <span style={{ color: '#999', fontSize: 12, marginLeft: 6 }}>({reason})</span>
+            </span>
+          ),
+          duration: 4
+        });
+
+        console.log(`🤖 AI派单: ${order.orderNo?.slice(-6)} → ${best.name} (${best.totalScore}分) [${reason}]`);
+
+        setTimeout(async () => {
+          try {
+            await ordersApi.dispatchOrder(order.id, best.code);
+            await ordersApi.updateOrderStatus(order.id, 'delivery_accepted');
+            message.success(`${best.name}骑手已接单`);
+            loadOrders();
+          } catch {}
+        }, 5000);
       }
     } catch (error) {
-      console.error('❌ 自动发起配送失败:', error);
+      console.error('AI 派单失败:', error);
     }
   };
 
@@ -303,12 +315,10 @@ export default function Orders() {
 
     const prices = platforms.map(p => ({
       ...p,
-      price: (Math.random() * 3 + 6).toFixed(1),
+      price: parseFloat((Math.random() * 3 + 6).toFixed(1)),
       estimatedTime: Math.floor(Math.random() * 10 + 20),
-      distance: (Math.random() * 2 + 1).toFixed(1)
+      distance: parseFloat((Math.random() * 2 + 1).toFixed(1))
     }));
-
-    setPlatformPrices(prices);
 
     // 读取配送设置，自动按策略预选平台
     try {
@@ -318,45 +328,108 @@ export default function Orders() {
         const strategy = deliverySettings.dispatchStrategy;
         let recommended: string | null = null;
 
-        if (strategy === 'low-price') {
-          // 低价优先：选价格最低的
-          const cheapest = prices.reduce((a, b) => parseFloat(a.price) < parseFloat(b.price) ? a : b);
-          recommended = cheapest.code;
-        } else if (strategy === 'fastest') {
-          // 速度优先：选预计时间最短的
-          const fastest = prices.reduce((a, b) => a.estimatedTime < b.estimatedTime ? a : b);
-          recommended = fastest.code;
-        } else if (strategy === 'balanced') {
-          // 智能化：按时段策略
+        if (strategy === 'ai-smart') {
+          // AI 智能派单：多维度评分
           const now = new Date();
-          const currentTime = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
-          const activeStrategy = deliverySettings.timeBasedStrategies?.find((s: any) => {
-            if (!s.enabled) return false;
-            return currentTime >= s.startTime && currentTime <= s.endTime;
+          const hour = now.getHours();
+          const isPeakHour = (hour >= 11 && hour < 13) || (hour >= 17 && hour < 20);
+          const isHighValue = parseFloat(order.totalAmount || '0') > 100;
+
+          // 动态权重
+          const weightPrice = isPeakHour || isHighValue ? 20 : 30;
+          const weightSpeed = isPeakHour || isHighValue ? 40 : 30;
+          const weightTimeSlot = 20;
+          const weightOrderFeature = 20;
+
+          // 平台时段接单率（mock）
+          const platformTimeSlotScore: Record<string, number> = {
+            dada: isPeakHour ? 85 : 70,
+            sf: isPeakHour ? 75 : 90,
+            shansong: isPeakHour ? 90 : 75,
+          };
+
+          // 订单特征匹配分
+          const getFeatureScore = (code: string, dist: number) => {
+            if (isHighValue) return code === 'sf' ? 95 : 70;
+            if (dist < 2) return code === 'shansong' ? 90 : 70;
+            return 80;
+          };
+
+          // 价格和速度归一化
+          const minPrice = Math.min(...prices.map(p => p.price));
+          const maxPrice = Math.max(...prices.map(p => p.price));
+          const minTime = Math.min(...prices.map(p => p.estimatedTime));
+          const maxTime = Math.max(...prices.map(p => p.estimatedTime));
+
+          // 计算综合评分
+          const scoredPrices = prices.map(p => {
+            const priceScore = maxPrice === minPrice ? 100 : ((maxPrice - p.price) / (maxPrice - minPrice)) * 100;
+            const speedScore = maxTime === minTime ? 100 : ((maxTime - p.estimatedTime) / (maxTime - minTime)) * 100;
+            const timeSlotScore = platformTimeSlotScore[p.code] || 75;
+            const featureScore = getFeatureScore(p.code, p.distance);
+
+            const totalScore = Math.round(
+              (priceScore * weightPrice +
+              speedScore * weightSpeed +
+              timeSlotScore * weightTimeSlot +
+              featureScore * weightOrderFeature) / 100
+            );
+
+            return {
+              ...p,
+              aiScore: totalScore,
+              priceScore: Math.round(priceScore),
+              speedScore: Math.round(speedScore),
+              timeSlotScore: Math.round(timeSlotScore),
+              featureScore: Math.round(featureScore)
+            };
           });
-          if (activeStrategy?.strategy === 'low-price') {
-            const cheapest = prices.reduce((a, b) => parseFloat(a.price) < parseFloat(b.price) ? a : b);
+
+          setPlatformPrices(scoredPrices);
+          const best = scoredPrices.reduce((a, b) => (a.aiScore || 0) > (b.aiScore || 0) ? a : b);
+          recommended = best.code;
+        } else {
+          setPlatformPrices(prices);
+
+          if (strategy === 'low-price') {
+            const cheapest = prices.reduce((a, b) => a.price < b.price ? a : b);
             recommended = cheapest.code;
-          } else if (activeStrategy?.strategy === 'fastest') {
+          } else if (strategy === 'fastest') {
             const fastest = prices.reduce((a, b) => a.estimatedTime < b.estimatedTime ? a : b);
             recommended = fastest.code;
-          } else {
-            // 无匹配时段，默认低价
-            const cheapest = prices.reduce((a, b) => parseFloat(a.price) < parseFloat(b.price) ? a : b);
-            recommended = cheapest.code;
+          } else if (strategy === 'balanced') {
+            const now = new Date();
+            const currentTime = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+            const activeStrategy = deliverySettings.timeBasedStrategies?.find((s: any) => {
+              if (!s.enabled) return false;
+              return currentTime >= s.startTime && currentTime <= s.endTime;
+            });
+            if (activeStrategy?.strategy === 'low-price') {
+              const cheapest = prices.reduce((a, b) => a.price < b.price ? a : b);
+              recommended = cheapest.code;
+            } else if (activeStrategy?.strategy === 'fastest') {
+              const fastest = prices.reduce((a, b) => a.estimatedTime < b.estimatedTime ? a : b);
+              recommended = fastest.code;
+            } else {
+              const cheapest = prices.reduce((a, b) => a.price < b.price ? a : b);
+              recommended = cheapest.code;
+            }
+          } else if (strategy === 'custom') {
+            const orderDistance = parseFloat((Math.random() * 2 + 1).toFixed(1));
+            const rule = deliverySettings.distanceBasedPlatforms?.find((r: any) =>
+              orderDistance >= r.minDistance && orderDistance < r.maxDistance
+            );
+            if (rule) recommended = rule.platform;
           }
-        } else if (strategy === 'custom') {
-          // 按距离：取第一个匹配的距离规则
-          const orderDistance = parseFloat((Math.random() * 2 + 1).toFixed(1));
-          const rule = deliverySettings.distanceBasedPlatforms?.find((r: any) =>
-            orderDistance >= r.minDistance && orderDistance < r.maxDistance
-          );
-          if (rule) recommended = rule.platform;
         }
 
         if (recommended) setSelectedPlatform(recommended);
+      } else {
+        setPlatformPrices(prices);
       }
-    } catch {}
+    } catch {
+      setPlatformPrices(prices);
+    }
 
     setDispatchModalVisible(true);
   };
@@ -865,9 +938,11 @@ export default function Orders() {
       {/* 派单弹窗 */}
       <Modal
         title={
-          <div style={{ fontSize: isMobile ? 16 : 18, fontWeight: 'bold' }}>
-            <RocketOutlined style={{ marginRight: 8, color: '#1890ff' }} />
-            选择运力平台
+          <div style={{ fontSize: isMobile ? 16 : 18, fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 8 }}>
+            {autoDispatchEnabled
+              ? <><ThunderboltOutlined style={{ color: '#eb2f96' }} /> AI 智能派单</>
+              : <><RocketOutlined style={{ color: '#1890ff' }} /> 选择运力平台</>
+            }
           </div>
         }
         open={dispatchModalVisible}
@@ -888,7 +963,11 @@ export default function Orders() {
               fontSize: isMobile ? 15 : 16,
               fontWeight: 'bold',
               borderRadius: 8,
-              background: selectedPlatform ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' : undefined,
+              background: selectedPlatform
+                ? autoDispatchEnabled
+                  ? 'linear-gradient(135deg, #eb2f96 0%, #722ed1 100%)'
+                  : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
+                : undefined,
               border: 'none'
             }}
           >
@@ -899,13 +978,23 @@ export default function Orders() {
         style={{ maxWidth: 500 }}
       >
         <div style={{ marginBottom: 16 }}>
-          <p style={{ marginBottom: 16, color: '#666', fontSize: isMobile ? 13 : 14, fontWeight: 'bold' }}>
-            各平台实时报价：
-            {selectedPlatform && (
-              <span style={{ fontSize: 11, color: '#52c41a', fontWeight: 'normal', marginLeft: 8 }}>
-                ✓ 已按配送策略自动推荐
+          {/* AI 模式说明条 */}
+          {autoDispatchEnabled && (
+            <div style={{
+              marginBottom: 14, padding: '10px 12px',
+              background: 'linear-gradient(135deg, #fff0f6 0%, #f9f0ff 100%)',
+              borderRadius: 8, border: '1px solid #ffadd2',
+              display: 'flex', alignItems: 'center', gap: 8
+            }}>
+              <ThunderboltOutlined style={{ color: '#eb2f96', fontSize: 14 }} />
+              <span style={{ fontSize: 12, color: '#eb2f96', fontWeight: 600 }}>
+                AI 已综合价格、速度、时段、订单特征完成评分，最优平台已自动选中
               </span>
-            )}
+            </div>
+          )}
+
+          <p style={{ marginBottom: 12, color: '#666', fontSize: isMobile ? 13 : 14, fontWeight: 'bold' }}>
+            各平台实时报价：
           </p>
 
           <Radio.Group
@@ -913,48 +1002,139 @@ export default function Orders() {
             onChange={(e) => setSelectedPlatform(e.target.value)}
             style={{ width: '100%' }}
           >
-            <Space direction="vertical" style={{ width: '100%' }} size={12}>
-              {platformPrices.map(platform => (
-                <Radio.Button
-                  key={platform.id}
-                  value={platform.code}
-                  style={{
-                    width: '100%',
-                    height: 'auto',
-                    padding: isMobile ? 12 : 16,
-                    borderRadius: 8,
-                    border: selectedPlatform === platform.code ? '2px solid #1890ff' : '1px solid #d9d9d9',
-                    background: selectedPlatform === platform.code ? '#e6f7ff' : 'white'
-                  }}
-                >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div>
-                      <div style={{ fontSize: isMobile ? 14 : 16, fontWeight: 'bold', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
-                        {platform.name}
-                        {selectedPlatform === platform.code && (
-                          <Tag color="blue" style={{ fontSize: 10, lineHeight: '16px', borderRadius: 8, margin: 0, padding: '0 6px' }}>推荐</Tag>
-                        )}
+            <Space direction="vertical" style={{ width: '100%' }} size={10}>
+              {platformPrices
+                .slice()
+                .sort((a, b) => autoDispatchEnabled ? (b.aiScore || 0) - (a.aiScore || 0) : 0)
+                .map(platform => {
+                  const isSelected = selectedPlatform === platform.code;
+                  const isAI = autoDispatchEnabled && platform.aiScore != null;
+                  return (
+                    <Radio.Button
+                      key={platform.id}
+                      value={platform.code}
+                      style={{
+                        width: '100%',
+                        height: 'auto',
+                        padding: isMobile ? 12 : 14,
+                        borderRadius: 8,
+                        border: isSelected
+                          ? `2px solid ${isAI ? '#eb2f96' : '#1890ff'}`
+                          : '1px solid #e8e8e8',
+                        background: isSelected
+                          ? isAI ? '#fff0f6' : '#e6f7ff'
+                          : 'white'
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontSize: isMobile ? 14 : 15, fontWeight: 'bold', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+                            {platform.name}
+                            {isSelected && (
+                              <Tag
+                                color={isAI ? 'magenta' : 'blue'}
+                                style={{ fontSize: 10, lineHeight: '16px', borderRadius: 8, margin: 0, padding: '0 6px' }}
+                              >
+                                {isAI ? '✨ AI推荐' : '推荐'}
+                              </Tag>
+                            )}
+                          </div>
+
+                          {/* AI 评分维度 */}
+                          {isAI && (
+                            <div style={{ display: 'flex', gap: 8, marginBottom: 6, flexWrap: 'wrap' }}>
+                              {[
+                                { label: '💰价格', score: platform.priceScore },
+                                { label: '⚡速度', score: platform.speedScore },
+                                { label: '🕐时段', score: platform.timeSlotScore },
+                                { label: '📦特征', score: platform.featureScore },
+                              ].map(dim => (
+                                <div key={dim.label} style={{
+                                  fontSize: 11, color: '#666',
+                                  background: '#f5f5f5', borderRadius: 4,
+                                  padding: '2px 6px', display: 'flex', gap: 3, alignItems: 'center'
+                                }}>
+                                  <span>{dim.label}</span>
+                                  <span style={{ color: dim.score >= 80 ? '#52c41a' : dim.score >= 60 ? '#faad14' : '#ff4d4f', fontWeight: 600 }}>
+                                    {dim.score}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
+                          <Space size={isMobile ? 10 : 14}>
+                            <span style={{ fontSize: isMobile ? 11 : 12, color: '#999' }}>
+                              预计 {platform.estimatedTime} 分钟
+                            </span>
+                            <span style={{ fontSize: isMobile ? 11 : 12, color: '#999' }}>
+                              {platform.distance} 公里
+                            </span>
+                          </Space>
+                        </div>
+
+                        <div style={{ textAlign: 'right', marginLeft: 12 }}>
+                          {isAI && (
+                            <div style={{
+                              fontSize: 18, fontWeight: 'bold',
+                              color: isSelected ? '#eb2f96' : '#666',
+                              lineHeight: 1
+                            }}>
+                              {platform.aiScore}
+                              <span style={{ fontSize: 11, fontWeight: 'normal', color: '#999' }}>分</span>
+                            </div>
+                          )}
+                          <div style={{ fontSize: isMobile ? 18 : 20, fontWeight: 'bold', color: '#ff4d4f', marginTop: isAI ? 2 : 0 }}>
+                            ¥{platform.price}
+                          </div>
+                        </div>
                       </div>
-                      <Space size={isMobile ? 12 : 16}>
-                        <span style={{ fontSize: isMobile ? 11 : 12, color: '#999' }}>
-                          预计 {platform.estimatedTime} 分钟
-                        </span>
-                        <span style={{ fontSize: isMobile ? 11 : 12, color: '#999' }}>
-                          {platform.distance} 公里
-                        </span>
-                      </Space>
-                    </div>
-                    <div style={{ textAlign: 'right' }}>
-                      <div style={{ fontSize: isMobile ? 20 : 24, fontWeight: 'bold', color: '#ff4d4f' }}>
-                        ¥{platform.price}
-                      </div>
-                    </div>
-                  </div>
-                </Radio.Button>
-              ))}
+                    </Radio.Button>
+                  );
+                })}
             </Space>
           </Radio.Group>
         </div>
+
+        {/* AI 智能派单提示 */}
+        {!autoDispatchEnabled && (
+          <Alert
+            message={
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <ThunderboltOutlined style={{ color: '#eb2f96', fontSize: 16 }} />
+                  <span style={{ fontSize: 13, fontWeight: 600, color: '#262626' }}>
+                    开启 AI 智能派单，自动选择最优平台
+                  </span>
+                </div>
+                <Button
+                  type="link"
+                  size="small"
+                  onClick={() => {
+                    setDispatchModalVisible(false);
+                    navigate('/mine/delivery-settings');
+                  }}
+                  style={{ padding: 0, fontSize: 12, fontWeight: 600 }}
+                >
+                  去开启 →
+                </Button>
+              </div>
+            }
+            description={
+              <div style={{ fontSize: 12, color: '#666', marginTop: 4 }}>
+                AI 会综合价格、速度、时段、订单特征自动决策，无需手动选择
+              </div>
+            }
+            type="info"
+            showIcon={false}
+            style={{
+              marginTop: 12,
+              borderRadius: 8,
+              border: '1px solid #ffadd2',
+              background: 'linear-gradient(135deg, #fff0f6 0%, #fff 100%)'
+            }}
+          />
+        )}
       </Modal>
     </div>
   );
